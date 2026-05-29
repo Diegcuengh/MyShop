@@ -90,6 +90,7 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     goodsId: product.goods_id,
     title: product.title ?? '',
     shopName: product.shop_name ?? '',
+    mallUrl: product.mall?.mall_url ?? '',
     imageUrl: product.image_url ?? '',
     goodsUrl: product.goods_url ?? '',
     rank: product.rank ?? null,
@@ -97,6 +98,15 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
     skuCount: product.sku_count ?? null
+  }
+}
+
+function serializeComparableProduct(product: SnapshotProduct) {
+  return {
+    rank: product.rank ?? null,
+    salesTipAmount: product.sales_tip_amount ?? null,
+    minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
+    maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null
   }
 }
 
@@ -334,6 +344,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         goods_id: 1,
         title: 1,
         shop_name: 1,
+        mall: 1,
         image_url: 1,
         goods_url: 1,
         rank: 1,
@@ -350,6 +361,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         goods_id: 1,
         title: 1,
         shop_name: 1,
+        mall: 1,
         image_url: 1,
         goods_url: 1,
         rank: 1,
@@ -384,6 +396,107 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       },
       removed,
       added
+    }
+  })
+
+  app.get('/api/trends/product-overlap', async (request) => {
+    const db = await getTrendsDb()
+    const compareRuns = await resolveCompareRuns(db, request.query)
+
+    if (!compareRuns) {
+      return {
+        previousRun: null,
+        currentRun: null,
+        products: []
+      }
+    }
+
+    const { currentRun, previousRun } = compareRuns
+    const projection = {
+      goods_id: 1,
+      title: 1,
+      shop_name: 1,
+      mall: 1,
+      image_url: 1,
+      goods_url: 1,
+      rank: 1,
+      sales_tip_amount: 1,
+      min_wholesale_price_yuan: 1,
+      max_wholesale_price_yuan: 1,
+      sku_count: 1
+    }
+    const previousProducts = (await db
+      .collection<SnapshotProduct>('goods_snapshots')
+      .find({ run_id: previousRun.run_id })
+      .project(projection)
+      .toArray()) as SnapshotProduct[]
+    const currentProducts = (await db
+      .collection<SnapshotProduct>('goods_snapshots')
+      .find({ run_id: currentRun.run_id })
+      .project(projection)
+      .toArray()) as SnapshotProduct[]
+    const currentById = new Map(currentProducts.map((product) => [product.goods_id, product]))
+    const products = previousProducts
+      .map((previousProduct) => {
+        const currentProduct = currentById.get(previousProduct.goods_id)
+
+        if (!currentProduct) {
+          return null
+        }
+
+        const previousSales = previousProduct.sales_tip_amount ?? null
+        const currentSales = currentProduct.sales_tip_amount ?? null
+        const previousRank = previousProduct.rank ?? null
+        const currentRank = currentProduct.rank ?? null
+        const previousMinPrice = previousProduct.min_wholesale_price_yuan ?? null
+        const currentMinPrice = currentProduct.min_wholesale_price_yuan ?? null
+        const previousMaxPrice = previousProduct.max_wholesale_price_yuan ?? null
+        const currentMaxPrice = currentProduct.max_wholesale_price_yuan ?? null
+
+        return {
+          goodsId: previousProduct.goods_id,
+          title: currentProduct.title || previousProduct.title || '',
+          shopName: currentProduct.shop_name || previousProduct.shop_name || '',
+          mallUrl: currentProduct.mall?.mall_url || previousProduct.mall?.mall_url || '',
+          imageUrl: currentProduct.image_url || previousProduct.image_url || '',
+          goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
+          skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
+          previous: serializeComparableProduct(previousProduct),
+          current: serializeComparableProduct(currentProduct),
+          changes: {
+            rankDelta: previousRank !== null && currentRank !== null ? currentRank - previousRank : null,
+            salesDelta: previousSales !== null && currentSales !== null ? currentSales - previousSales : null,
+            minPriceDelta:
+              previousMinPrice !== null && currentMinPrice !== null ? Number((currentMinPrice - previousMinPrice).toFixed(2)) : null,
+            maxPriceDelta:
+              previousMaxPrice !== null && currentMaxPrice !== null ? Number((currentMaxPrice - previousMaxPrice).toFixed(2)) : null
+          }
+        }
+      })
+      .filter((product): product is NonNullable<typeof product> => Boolean(product))
+      .sort((a, b) => {
+        const aSales = Math.abs(a.changes.salesDelta ?? 0)
+        const bSales = Math.abs(b.changes.salesDelta ?? 0)
+
+        if (aSales !== bSales) {
+          return bSales - aSales
+        }
+
+        return (a.current.rank ?? Number.MAX_SAFE_INTEGER) - (b.current.rank ?? Number.MAX_SAFE_INTEGER)
+      })
+
+    return {
+      previousRun: {
+        runId: previousRun.run_id,
+        keyword: previousRun.keyword,
+        crawlTime: previousRun.crawl_time.toISOString()
+      },
+      currentRun: {
+        runId: currentRun.run_id,
+        keyword: currentRun.keyword,
+        crawlTime: currentRun.crawl_time.toISOString()
+      },
+      products
     }
   })
 

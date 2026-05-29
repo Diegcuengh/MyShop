@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +33,7 @@ DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
 DEFAULT_DB = "pdd_sales_trends"
 BATCH_SIZE = 500
 DB_STATUS_KEY = "DB_status"
-SCRIPT_VERSION = "2026.05.27.4"
+SCRIPT_VERSION = "2026.05.29.2"
 
 
 class ChineseHelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
@@ -200,9 +200,44 @@ def run_db_status(run: dict[str, Any]) -> dict[str, Any] | None:
     return status if isinstance(status, dict) else None
 
 
+def latest_data_modified_at(run: dict[str, Any]) -> datetime | None:
+    candidates: list[Path] = []
+    for key in ("search_file", "list_file"):
+        path = run.get(key)
+        if isinstance(path, Path) and path.exists():
+            candidates.append(path)
+
+    goods_dir = run["folder"] / "goods"
+    if goods_dir.exists():
+        candidates.extend(path for path in goods_dir.rglob("*") if path.is_file())
+
+    if not candidates:
+        return None
+
+    latest = max(path.stat().st_mtime for path in candidates)
+    return datetime.fromtimestamp(latest, timezone.utc)
+
+
 def is_run_imported(run: dict[str, Any]) -> bool:
     status = run_db_status(run)
-    return bool(status and status.get("status") == "done")
+    if not status or status.get("status") != "done":
+        return False
+
+    imported_at = parse_iso_datetime(status.get("imported_at"))
+    latest_modified_at = latest_data_modified_at(run)
+    if imported_at and latest_modified_at and latest_modified_at > imported_at + timedelta(seconds=5):
+        print(
+            f"{run['run_id']}: data changed after DB_status, "
+            f"latest_modified_at={latest_modified_at.isoformat()}, imported_at={imported_at.isoformat()}"
+        )
+        return False
+
+    return True
+
+
+def mark_run_failed(run: dict[str, Any], args: argparse.Namespace, error: Exception) -> None:
+    if not args.dry_run:
+        write_db_status(run, args, "failed", "current_import", str(error))
 
 
 def write_db_status(run: dict[str, Any], args: argparse.Namespace, status_value: str, source: str, error: str | None = None) -> None:
@@ -429,6 +464,7 @@ def import_runs(args: argparse.Namespace) -> None:
     totals = {
         "runs": 0,
         "skipped_runs": 0,
+        "failed_runs": 0,
         "goods_ops": 0,
         "snapshot_ops": 0,
         "sku_ops": 0,
@@ -437,7 +473,7 @@ def import_runs(args: argparse.Namespace) -> None:
     for run in runs:
         if is_run_imported(run):
             totals["skipped_runs"] += 1
-            print(f"{run['run_id']}: skipped, DB_status is imported in _搜索结果.json")
+            print(f"{run['run_id']}: skipped, DB_status.status=done in _搜索结果.json")
             continue
 
         goods_dir = run["folder"] / "goods"
@@ -460,15 +496,21 @@ def import_runs(args: argparse.Namespace) -> None:
             "imported_at": datetime.now(timezone.utc),
         }
 
-        goods_ops, snapshot_ops, sku_ops = build_documents(run, goods_dir)
+        try:
+            goods_ops, snapshot_ops, sku_ops = build_documents(run, goods_dir)
 
-        if not args.dry_run:
-            db.crawl_runs.replace_one({"_id": run_doc["_id"]}, run_doc, upsert=True)
-        write_ops(db.goods, goods_ops, args.dry_run)
-        write_ops(db.goods_snapshots, snapshot_ops, args.dry_run)
-        write_ops(db.sku_snapshots, sku_ops, args.dry_run)
-        if not args.dry_run:
-            write_db_status(run, args, "done", "current_import")
+            if not args.dry_run:
+                db.crawl_runs.replace_one({"_id": run_doc["_id"]}, run_doc, upsert=True)
+            write_ops(db.goods, goods_ops, args.dry_run)
+            write_ops(db.goods_snapshots, snapshot_ops, args.dry_run)
+            write_ops(db.sku_snapshots, sku_ops, args.dry_run)
+            if not args.dry_run:
+                write_db_status(run, args, "done", "current_import")
+        except Exception as error:
+            mark_run_failed(run, args, error)
+            totals["failed_runs"] += 1
+            print(f"{run['run_id']}: failed, DB_status.status=failed, error={error}")
+            continue
 
         totals["runs"] += 1
         totals["goods_ops"] += len(goods_ops)

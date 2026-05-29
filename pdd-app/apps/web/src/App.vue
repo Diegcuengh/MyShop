@@ -43,6 +43,7 @@ type DiffProduct = {
   goodsId: string
   title: string
   shopName: string
+  mallUrl: string
   imageUrl: string
   goodsUrl: string
   rank: number | null
@@ -65,6 +66,40 @@ type ProductDiff = {
   } | null
   removed: DiffProduct[]
   added: DiffProduct[]
+}
+
+type ProductOverlapItem = {
+  goodsId: string
+  title: string
+  shopName: string
+  mallUrl: string
+  imageUrl: string
+  goodsUrl: string
+  skuCount: number | null
+  previous: {
+    rank: number | null
+    salesTipAmount: number | null
+    minWholesalePriceYuan: number | null
+    maxWholesalePriceYuan: number | null
+  }
+  current: {
+    rank: number | null
+    salesTipAmount: number | null
+    minWholesalePriceYuan: number | null
+    maxWholesalePriceYuan: number | null
+  }
+  changes: {
+    rankDelta: number | null
+    salesDelta: number | null
+    minPriceDelta: number | null
+    maxPriceDelta: number | null
+  }
+}
+
+type ProductOverlap = {
+  previousRun: ProductDiff['previousRun']
+  currentRun: ProductDiff['currentRun']
+  products: ProductOverlapItem[]
 }
 
 type ShopDiffProduct = {
@@ -99,8 +134,10 @@ const shopTrendPoints = ref<ShopCountTrend[]>([])
 const topSalesTrendPoints = ref<TopSalesTrend[]>([])
 const totalSalesTrendPoints = ref<TotalSalesTrend[]>([])
 const productDiff = ref<ProductDiff | null>(null)
+const productOverlap = ref<ProductOverlap | null>(null)
 const shopDiff = ref<ShopDiff | null>(null)
 const selectedMetric = ref<TrendMetric>('product')
+const productResultTab = ref<'removed' | 'added' | 'overlap'>('removed')
 const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
 const openedShopInfoKey = ref('')
@@ -202,6 +239,10 @@ const activeRunDiff = computed(() => {
   return selectedMetric.value === 'shop' ? shopDiff.value : productDiff.value
 })
 
+const removedProducts = computed(() => productDiff.value?.removed ?? [])
+const addedProducts = computed(() => productDiff.value?.added ?? [])
+const overlapProducts = computed(() => productOverlap.value?.products ?? [])
+
 const trendChart = computed(() => {
   const width = 720
   const height = 260
@@ -287,11 +328,13 @@ async function loadDiffs() {
 
   try {
     const query = buildCompareQuery()
-    const [diff, shopDiffData] = await Promise.all([
+    const [diff, overlap, shopDiffData] = await Promise.all([
       apiFetch<ProductDiff>(`/api/trends/product-diff${query}`),
+      apiFetch<ProductOverlap>(`/api/trends/product-overlap${query}`),
       apiFetch<ShopDiff>(`/api/trends/shop-diff${query}`)
     ])
     productDiff.value = diff
+    productOverlap.value = overlap
     shopDiff.value = shopDiffData
   } finally {
     diffLoading.value = false
@@ -405,6 +448,26 @@ function formatProductPrice(product: ShopDiffProduct) {
   }
 
   return `¥${(min ?? max ?? 0).toFixed(2)}`
+}
+
+function formatOverlapPrice(min: number | null, max: number | null) {
+  if (min === null && max === null) {
+    return '暂无价格'
+  }
+
+  if (min !== null && max !== null && min !== max) {
+    return `¥${min.toFixed(2)} - ¥${max.toFixed(2)}`
+  }
+
+  return `¥${(min ?? max ?? 0).toFixed(2)}`
+}
+
+function formatOptionalChange(value: number | null, suffix = '') {
+  if (value === null) {
+    return '-'
+  }
+
+  return `${value > 0 ? '+' : ''}${value}${suffix}`
 }
 
 function toggleShopInfo(shopKey: string) {
@@ -546,8 +609,23 @@ onMounted(loadDashboard)
 
     <p v-if="diffLoading" class="muted">正在更新对比结果...</p>
 
-    <section v-if="selectedMetric === 'product'" class="diff-grid">
-      <section class="panel diff-section">
+    <section v-if="selectedMetric === 'product'" class="panel product-result-panel">
+      <div class="result-tabs">
+        <button type="button" :class="{ active: productResultTab === 'removed' }" @click="productResultTab = 'removed'">
+          本次未出现
+          <span>{{ productDiff?.removed.length ?? 0 }}</span>
+        </button>
+        <button type="button" :class="{ active: productResultTab === 'added' }" @click="productResultTab = 'added'">
+          本次新出现
+          <span>{{ productDiff?.added.length ?? 0 }}</span>
+        </button>
+        <button type="button" :class="{ active: productResultTab === 'overlap' }" @click="productResultTab = 'overlap'">
+          持续存在
+          <span>{{ productOverlap?.products.length ?? 0 }}</span>
+        </button>
+      </div>
+
+      <section v-if="productResultTab === 'removed'" class="diff-section">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">起点有，终点没有</p>
@@ -555,29 +633,28 @@ onMounted(loadDashboard)
           </div>
           <span>{{ productDiff?.removed.length ?? 0 }} 个</span>
         </div>
-
-        <p v-if="loading && !productDiff" class="muted">正在加载商品差异...</p>
-        <p v-else-if="productDiff && productDiff.removed.length === 0" class="muted">没有本次未出现的商品。</p>
-
-        <article v-for="product in productDiff?.removed" :key="product.goodsId" class="diff-card">
+        <article v-for="product in removedProducts" :key="product.goodsId" class="diff-card">
           <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
           <div class="diff-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
               <strong>{{ formatPrice(product) }}</strong>
             </div>
+            <p class="muted">商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }}</p>
             <p class="muted">
-              商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }}
-            </p>
-            <p class="muted">
-              店铺：{{ product.shopName || '-' }} · SKU：{{ product.skuCount ?? '-' }}
+              店铺：
+              <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
+                {{ product.shopName || product.mallUrl }}
+              </a>
+              <span v-else>{{ product.shopName || '-' }}</span>
+              · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
           </div>
         </article>
       </section>
 
-      <section class="panel diff-section">
+      <section v-else-if="productResultTab === 'added'" class="diff-section">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">终点有，起点没有</p>
@@ -585,30 +662,63 @@ onMounted(loadDashboard)
           </div>
           <span>{{ productDiff?.added.length ?? 0 }} 个</span>
         </div>
-
-        <p v-if="loading && !productDiff" class="muted">正在加载商品差异...</p>
-        <p v-else-if="productDiff && productDiff.added.length === 0" class="muted">没有本次新出现的商品。</p>
-
-        <article v-for="product in productDiff?.added" :key="product.goodsId" class="diff-card">
+        <article v-for="product in addedProducts" :key="product.goodsId" class="diff-card">
           <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
           <div class="diff-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
               <strong>{{ formatPrice(product) }}</strong>
             </div>
+            <p class="muted">商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }}</p>
             <p class="muted">
-              商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }}
+              店铺：
+              <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
+                {{ product.shopName || product.mallUrl }}
+              </a>
+              <span v-else>{{ product.shopName || '-' }}</span>
+              · SKU：{{ product.skuCount ?? '-' }}
             </p>
+            <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
+          </div>
+        </article>
+      </section>
+
+      <section v-else class="diff-section">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">起点和终点都存在</p>
+            <h2>持续存在的商品</h2>
+          </div>
+          <span>{{ productOverlap?.products.length ?? 0 }} 个</span>
+        </div>
+        <article v-for="product in overlapProducts" :key="product.goodsId" class="overlap-card">
+          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          <div class="overlap-card-body">
+            <div class="diff-card-title">
+              <h3>{{ product.title || product.goodsId }}</h3>
+              <strong>{{ formatOptionalChange(product.changes.salesDelta) }} 销量</strong>
+            </div>
             <p class="muted">
-              店铺：{{ product.shopName || '-' }} · SKU：{{ product.skuCount ?? '-' }}
+              商品ID：{{ product.goodsId }} · 店铺：
+              <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
+                {{ product.shopName || product.mallUrl }}
+              </a>
+              <span v-else>{{ product.shopName || '-' }}</span>
+              · SKU：{{ product.skuCount ?? '-' }}
             </p>
+            <div class="overlap-metrics">
+              <span>排名：{{ product.previous.rank ?? '-' }} → {{ product.current.rank ?? '-' }}</span>
+              <span>销量：{{ product.previous.salesTipAmount ?? '-' }} → {{ product.current.salesTipAmount ?? '-' }}</span>
+              <span>价格：{{ formatOverlapPrice(product.previous.minWholesalePriceYuan, product.previous.maxWholesalePriceYuan) }} → {{ formatOverlapPrice(product.current.minWholesalePriceYuan, product.current.maxWholesalePriceYuan) }}</span>
+              <span>排名变化：{{ formatOptionalChange(product.changes.rankDelta) }}</span>
+            </div>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
           </div>
         </article>
       </section>
     </section>
 
-    <section v-else-if="selectedMetric === 'shop'" class="diff-grid">
+    <section v-if="selectedMetric === 'shop'" class="diff-grid">
       <section class="panel diff-section">
         <div class="panel-heading">
           <div>
@@ -792,7 +902,7 @@ onMounted(loadDashboard)
       </section>
     </section>
 
-    <section v-else-if="selectedMetric === 'sales'" class="panel sales-section">
+    <section v-if="selectedMetric === 'sales'" class="panel sales-section">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">每次抓取的销量最高商品</p>
@@ -822,7 +932,7 @@ onMounted(loadDashboard)
       </div>
     </section>
 
-    <section v-else class="panel sales-section">
+    <section v-if="selectedMetric === 'salesDelta'" class="panel sales-section">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">每次抓取商品总销量变化</p>

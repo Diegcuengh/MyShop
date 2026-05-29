@@ -330,6 +330,46 @@ textarea:focus {
   align-items: start;
 }
 
+.product-result-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.result-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid #e3e9f2;
+  padding-bottom: 12px;
+}
+
+.result-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.result-tabs button.active {
+  border-color: #2d7ff9;
+  background: #f3f8ff;
+  color: #1d5fd1;
+}
+
+.result-tabs span {
+  border-radius: 999px;
+  background: #e8eef7;
+  color: #526176;
+  padding: 2px 7px;
+  font-size: 12px;
+}
+
 .diff-section {
   display: grid;
   gap: 12px;
@@ -385,6 +425,60 @@ textarea:focus {
 }
 
 .diff-card a {
+  width: fit-content;
+  color: #2d7ff9;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.diff-card a.inline-shop-link,
+.overlap-card a.inline-shop-link {
+  display: inline;
+  width: auto;
+  font-size: inherit;
+  font-weight: 700;
+}
+
+.overlap-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 14px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.overlap-card img {
+  width: 96px;
+  height: 96px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #eef2f7;
+}
+
+.overlap-card-body {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.overlap-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.overlap-metrics span {
+  border-radius: 6px;
+  background: #f3f6fb;
+  color: #526176;
+  padding: 7px 9px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.overlap-card a {
   width: fit-content;
   color: #2d7ff9;
   font-size: 13px;
@@ -728,6 +822,19 @@ textarea:focus {
   .diff-card img {
     width: 76px;
     height: 76px;
+  }
+
+  .overlap-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .overlap-card img {
+    width: 76px;
+    height: 76px;
+  }
+
+  .overlap-metrics {
+    grid-template-columns: 1fr;
   }
 
   .sales-card {
