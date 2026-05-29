@@ -1,7 +1,0 @@
-npm error Lifecycle script `dev` failed with error:
-npm error code 1
-npm error path E:\proj\MyShop\pdd-app\apps\web
-npm error workspace @pdd/web@0.0.0
-npm error location E:\proj\MyShop\pdd-app\apps\web
-npm error command failed
-npm error command C:\Windows\system32\cmd.exe /d /s /c vite

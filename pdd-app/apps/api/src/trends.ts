@@ -46,6 +46,38 @@ type SnapshotProduct = {
   min_wholesale_price_yuan?: number
   max_wholesale_price_yuan?: number
   sku_count?: number
+  raw_detail?: {
+    queryGoodsReviewList?: {
+      result?: {
+        total?: number
+        totalText?: string
+      }
+    }
+  }
+}
+
+function getCommentCount(product: SnapshotProduct) {
+  const total = product.raw_detail?.queryGoodsReviewList?.result?.total
+  const totalText = product.raw_detail?.queryGoodsReviewList?.result?.totalText
+
+  if (totalText) {
+    const normalizedText = totalText.replace(/,/g, '').trim()
+    const numericPart = normalizedText.match(/\d+(?:\.\d+)?/)?.[0]
+
+    if (numericPart) {
+      const parsed = Number(numericPart)
+
+      if (Number.isFinite(parsed)) {
+        return normalizedText.includes('万') ? Math.round(parsed * 10000) : Math.round(parsed)
+      }
+    }
+  }
+
+  if (typeof total === 'number') {
+    return total
+  }
+
+  return null
 }
 
 function serializeTrendPoint(point: ProductCountTrend) {
@@ -95,6 +127,7 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     goodsUrl: product.goods_url ?? '',
     rank: product.rank ?? null,
     salesTipAmount: product.sales_tip_amount ?? null,
+    commentCount: getCommentCount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
     skuCount: product.sku_count ?? null
@@ -349,6 +382,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
+        raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
         sku_count: 1
@@ -366,6 +400,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
+        raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
         sku_count: 1
@@ -421,6 +456,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       goods_url: 1,
       rank: 1,
       sales_tip_amount: 1,
+      raw_detail: 1,
       min_wholesale_price_yuan: 1,
       max_wholesale_price_yuan: 1,
       sku_count: 1
@@ -461,6 +497,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           imageUrl: currentProduct.image_url || previousProduct.image_url || '',
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
+          commentCount: getCommentCount(currentProduct) ?? getCommentCount(previousProduct),
           previous: serializeComparableProduct(previousProduct),
           current: serializeComparableProduct(currentProduct),
           changes: {
@@ -497,6 +534,48 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         crawlTime: currentRun.crawl_time.toISOString()
       },
       products
+    }
+  })
+
+  app.get('/api/trends/product-list', async (request) => {
+    const db = await getTrendsDb()
+    const compareRuns = await resolveCompareRuns(db, request.query)
+
+    if (!compareRuns) {
+      return {
+        currentRun: null,
+        products: []
+      }
+    }
+
+    const { currentRun } = compareRuns
+    const products = (await db
+      .collection<SnapshotProduct>('goods_snapshots')
+      .find({ run_id: currentRun.run_id })
+      .project({
+        goods_id: 1,
+        title: 1,
+        shop_name: 1,
+        mall: 1,
+        image_url: 1,
+        goods_url: 1,
+        rank: 1,
+        sales_tip_amount: 1,
+        raw_detail: 1,
+        min_wholesale_price_yuan: 1,
+        max_wholesale_price_yuan: 1,
+        sku_count: 1
+      })
+      .sort({ rank: 1, sales_tip_amount: -1 })
+      .toArray()) as SnapshotProduct[]
+
+    return {
+      currentRun: {
+        runId: currentRun.run_id,
+        keyword: currentRun.keyword,
+        crawlTime: currentRun.crawl_time.toISOString()
+      },
+      products: products.map(serializeSnapshotProduct)
     }
   })
 

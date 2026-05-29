@@ -370,6 +370,36 @@ textarea:focus {
   font-size: 12px;
 }
 
+.product-sort-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.product-sort-controls span {
+  color: #637083;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.product-sort-controls button {
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.product-sort-controls button.active {
+  border-color: #2d7ff9;
+  background: #2d7ff9;
+  color: #fff;
+}
+
 .diff-section {
   display: grid;
   gap: 12px;
