@@ -47,6 +47,16 @@ type SnapshotProduct = {
   max_wholesale_price_yuan?: number
   sku_count?: number
   raw_detail?: {
+    queryGoodsDetail?: {
+      result?: {
+        salesTipAmount?: string | number
+      }
+    }
+    queryGoodsShareInfo?: {
+      result?: {
+        salesTipAmount?: string | number
+      }
+    }
     queryGoodsReviewList?: {
       result?: {
         total?: number
@@ -54,6 +64,45 @@ type SnapshotProduct = {
       }
     }
   }
+  raw_search_item?: {
+    mallUrl?: string
+    storeHref?: string
+    _mallUrl?: string
+  }
+}
+
+function parseHumanAmount(value: string | number | undefined) {
+  if (typeof value === 'number') {
+    return value
+  }
+
+  if (!value) {
+    return null
+  }
+
+  const normalizedText = value.replace(/,/g, '').trim()
+  const numericPart = normalizedText.match(/\d+(?:\.\d+)?/)?.[0]
+
+  if (!numericPart) {
+    return null
+  }
+
+  const parsed = Number(numericPart)
+
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return normalizedText.includes('万') ? Math.round(parsed * 10000) : Math.round(parsed)
+}
+
+function getSalesTipAmount(product: SnapshotProduct) {
+  return (
+    parseHumanAmount(product.raw_detail?.queryGoodsDetail?.result?.salesTipAmount) ??
+    parseHumanAmount(product.raw_detail?.queryGoodsShareInfo?.result?.salesTipAmount) ??
+    product.sales_tip_amount ??
+    null
+  )
 }
 
 function getCommentCount(product: SnapshotProduct) {
@@ -61,15 +110,10 @@ function getCommentCount(product: SnapshotProduct) {
   const totalText = product.raw_detail?.queryGoodsReviewList?.result?.totalText
 
   if (totalText) {
-    const normalizedText = totalText.replace(/,/g, '').trim()
-    const numericPart = normalizedText.match(/\d+(?:\.\d+)?/)?.[0]
+    const parsed = parseHumanAmount(totalText)
 
-    if (numericPart) {
-      const parsed = Number(numericPart)
-
-      if (Number.isFinite(parsed)) {
-        return normalizedText.includes('万') ? Math.round(parsed * 10000) : Math.round(parsed)
-      }
+    if (parsed !== null) {
+      return parsed
     }
   }
 
@@ -112,7 +156,7 @@ function serializeTopSalesTrendPoint(point: TopSalesTrend) {
     runId: point.run_id,
     keyword: point.keyword,
     crawlTime: point.crawl_time.toISOString(),
-    salesTipAmount: point.sales_tip_amount ?? 0,
+    salesTipAmount: getSalesTipAmount(point) ?? 0,
     product: serializeSnapshotProduct(point)
   }
 }
@@ -122,11 +166,11 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     goodsId: product.goods_id,
     title: product.title ?? '',
     shopName: product.shop_name ?? '',
-    mallUrl: product.mall?.mall_url ?? '',
+    mallUrl: getMallUrl(product),
     imageUrl: product.image_url ?? '',
     goodsUrl: product.goods_url ?? '',
     rank: product.rank ?? null,
-    salesTipAmount: product.sales_tip_amount ?? null,
+    salesTipAmount: getSalesTipAmount(product),
     commentCount: getCommentCount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
@@ -137,7 +181,7 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
 function serializeComparableProduct(product: SnapshotProduct) {
   return {
     rank: product.rank ?? null,
-    salesTipAmount: product.sales_tip_amount ?? null,
+    salesTipAmount: getSalesTipAmount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null
   }
@@ -150,12 +194,22 @@ function getShopKey(product: SnapshotProduct) {
   return product.mall?.mall_id || mallUrlMid || product.mall?.real_mall_id || product.shop_name || ''
 }
 
+function getMallUrl(product: SnapshotProduct) {
+  return (
+    product.mall?.mall_url ||
+    product.raw_search_item?.mallUrl ||
+    product.raw_search_item?.storeHref ||
+    product.raw_search_item?._mallUrl ||
+    ''
+  )
+}
+
 function serializeShopProduct(product: SnapshotProduct) {
   return {
     goodsId: product.goods_id,
     title: product.title ?? '',
     rank: product.rank ?? null,
-    salesTipAmount: product.sales_tip_amount ?? null,
+    salesTipAmount: getSalesTipAmount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null
   }
@@ -171,10 +225,10 @@ function buildShopDiffItem(products: SnapshotProduct[]) {
     shopKey: getShopKey(first),
     shopName: first.mall?.mall_name || first.shop_name || '',
     mallLogo: first.mall?.mall_logo || '',
-    mallUrl: first.mall?.mall_url || '',
+    mallUrl: getMallUrl(first),
     productCount: products.length,
     topRank: productsSortedByRank[0]?.rank ?? null,
-    totalSalesTipAmount: products.reduce((total, product) => total + (product.sales_tip_amount ?? 0), 0),
+    totalSalesTipAmount: products.reduce((total, product) => total + (getSalesTipAmount(product) ?? 0), 0),
     products: productsSortedByRank.slice(0, 6).map(serializeShopProduct)
   }
 }
@@ -289,69 +343,78 @@ export async function registerTrendRoutes(app: FastifyInstance) {
 
   app.get('/api/trends/total-sales', async () => {
     const db = await getTrendsDb()
-    const points = await db
-      .collection('goods_snapshots')
-      .aggregate<TotalSalesTrend>([
-        {
-          $group: {
-            _id: '$run_id',
-            runId: { $first: '$run_id' },
-            keyword: { $first: '$keyword' },
-            crawlTime: { $first: '$crawl_time' },
-            totalSales: { $sum: { $ifNull: ['$sales_tip_amount', 0] } }
-          }
-        },
-        { $sort: { crawlTime: 1 } },
-        {
-          $project: {
-            _id: 0,
-            runId: 1,
-            keyword: 1,
-            crawlTime: 1,
-            totalSales: 1
-          }
-        }
-      ])
+    const snapshots = (await db
+      .collection<SnapshotProduct & { run_id: string; keyword: string; crawl_time: Date }>('goods_snapshots')
+      .find()
+      .project({
+        run_id: 1,
+        keyword: 1,
+        crawl_time: 1,
+        sales_tip_amount: 1,
+        raw_detail: 1
+      })
       .toArray()
+    ) as Array<SnapshotProduct & { run_id: string; keyword: string; crawl_time: Date }>
+    const runMap = new Map<string, TotalSalesTrend>()
+
+    for (const snapshot of snapshots) {
+      const point = runMap.get(snapshot.run_id) ?? {
+        runId: snapshot.run_id,
+        keyword: snapshot.keyword,
+        crawlTime: snapshot.crawl_time,
+        totalSales: 0
+      }
+      point.totalSales += getSalesTipAmount(snapshot) ?? 0
+      runMap.set(snapshot.run_id, point)
+    }
+
+    const points = [...runMap.values()].sort((a, b) => a.crawlTime.getTime() - b.crawlTime.getTime())
 
     return points.map(serializeTotalSalesTrendPoint)
   })
 
   app.get('/api/trends/top-sales', async () => {
     const db = await getTrendsDb()
-    const points = await db
-      .collection('goods_snapshots')
-      .aggregate<TopSalesTrend>([
-        {
-          $match: {
-            sales_tip_amount: { $type: 'number' }
-          }
-        },
-        {
-          $sort: {
-            run_id: 1,
-            sales_tip_amount: -1,
-            rank: 1
-          }
-        },
-        {
-          $group: {
-            _id: '$run_id',
-            doc: { $first: '$$ROOT' }
-          }
-        },
-        {
-          $replaceRoot: {
-            newRoot: '$doc'
-          }
-        },
-        {
-          $sort: {
-            crawl_time: 1
-          }
-        }
-      ])
+    const snapshots = (await db
+      .collection<TopSalesTrend>('goods_snapshots')
+      .find()
+      .project({
+        run_id: 1,
+        keyword: 1,
+        crawl_time: 1,
+        goods_id: 1,
+        title: 1,
+        shop_name: 1,
+        mall: 1,
+        raw_search_item: 1,
+        image_url: 1,
+        goods_url: 1,
+        rank: 1,
+        sales_tip_amount: 1,
+        raw_detail: 1,
+        min_wholesale_price_yuan: 1,
+        max_wholesale_price_yuan: 1,
+        sku_count: 1
+      })
       .toArray()
+    ) as TopSalesTrend[]
+    const runMap = new Map<string, TopSalesTrend>()
+
+    for (const snapshot of snapshots) {
+      const current = runMap.get(snapshot.run_id)
+      const snapshotSales = getSalesTipAmount(snapshot) ?? -1
+      const currentSales = current ? getSalesTipAmount(current) ?? -1 : -1
+
+      if (
+        !current ||
+        snapshotSales > currentSales ||
+        (snapshotSales === currentSales && (snapshot.rank ?? Number.MAX_SAFE_INTEGER) < (current.rank ?? Number.MAX_SAFE_INTEGER))
+      ) {
+        runMap.set(snapshot.run_id, snapshot)
+      }
+    }
+
+    const points = [...runMap.values()].sort((a, b) => a.crawl_time.getTime() - b.crawl_time.getTime())
 
     return points.map(serializeTopSalesTrendPoint)
   })
@@ -378,6 +441,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         title: 1,
         shop_name: 1,
         mall: 1,
+        raw_search_item: 1,
         image_url: 1,
         goods_url: 1,
         rank: 1,
@@ -396,6 +460,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         title: 1,
         shop_name: 1,
         mall: 1,
+        raw_search_item: 1,
         image_url: 1,
         goods_url: 1,
         rank: 1,
@@ -452,6 +517,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       title: 1,
       shop_name: 1,
       mall: 1,
+      raw_search_item: 1,
       image_url: 1,
       goods_url: 1,
       rank: 1,
@@ -480,8 +546,8 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           return null
         }
 
-        const previousSales = previousProduct.sales_tip_amount ?? null
-        const currentSales = currentProduct.sales_tip_amount ?? null
+        const previousSales = getSalesTipAmount(previousProduct)
+        const currentSales = getSalesTipAmount(currentProduct)
         const previousRank = previousProduct.rank ?? null
         const currentRank = currentProduct.rank ?? null
         const previousMinPrice = previousProduct.min_wholesale_price_yuan ?? null
@@ -493,7 +559,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           goodsId: previousProduct.goods_id,
           title: currentProduct.title || previousProduct.title || '',
           shopName: currentProduct.shop_name || previousProduct.shop_name || '',
-          mallUrl: currentProduct.mall?.mall_url || previousProduct.mall?.mall_url || '',
+          mallUrl: getMallUrl(currentProduct) || getMallUrl(previousProduct),
           imageUrl: currentProduct.image_url || previousProduct.image_url || '',
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
@@ -557,6 +623,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         title: 1,
         shop_name: 1,
         mall: 1,
+        raw_search_item: 1,
         image_url: 1,
         goods_url: 1,
         rank: 1,
@@ -598,8 +665,10 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       title: 1,
       shop_name: 1,
       mall: 1,
+      raw_search_item: 1,
       rank: 1,
       sales_tip_amount: 1,
+      raw_detail: 1,
       min_wholesale_price_yuan: 1,
       max_wholesale_price_yuan: 1
     }
