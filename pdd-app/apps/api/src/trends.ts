@@ -51,6 +51,14 @@ type SnapshotProduct = {
   min_wholesale_price_yuan?: number
   max_wholesale_price_yuan?: number
   sku_count?: number
+  tags?: string[]
+  tags_auto?: string[]
+  tags_source?: 'auto' | 'manual'
+  tags_updated_at?: Date
+  property_texts?: Array<{
+    propertyName?: string
+    propertyValues?: string[]
+  }>
   skus?: Array<{
     sku_id?: string
     specs?: Array<{ key?: string; value?: string }>
@@ -225,6 +233,7 @@ function serializeTopSalesTrendPoint(point: TopSalesTrend) {
 
 function serializeSnapshotProduct(product: SnapshotProduct) {
   return {
+    runId: product.run_id ?? '',
     goodsId: product.goods_id,
     title: product.title ?? '',
     shopName: product.shop_name ?? '',
@@ -242,6 +251,9 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
     skuCount: product.sku_count ?? null,
+    tags: product.tags ?? product.tags_auto ?? [],
+    tagsAuto: product.tags_auto ?? [],
+    tagsSource: product.tags_source ?? '',
     skus: (product.skus ?? []).map(serializeSku)
   }
 }
@@ -272,6 +284,107 @@ function getMallUrl(product: SnapshotProduct) {
     product.raw_search_item?._mallUrl ||
     ''
   )
+}
+
+function getProductText(product: SnapshotProduct) {
+  const propertyText = (product.property_texts ?? [])
+    .map((property) => `${property.propertyName ?? ''} ${(property.propertyValues ?? []).join(' ')}`)
+    .join(' ')
+  const skuText = (product.skus ?? [])
+    .flatMap((sku) => sku.specs ?? [])
+    .map((spec) => `${spec.key ?? ''} ${spec.value ?? ''}`)
+    .join(' ')
+
+  return `${product.title ?? ''} ${propertyText} ${skuText}`.toLowerCase()
+}
+
+function generateProductTags(product: SnapshotProduct) {
+  const text = getProductText(product)
+  const tags = new Set<string>()
+
+  if (/铜|黄铜|纯铜|铜牌|铜挂件/.test(text)) {
+    tags.add('铜')
+    tags.add('铜牌/铜挂件')
+  }
+
+  if (/贴纸|门贴|墙贴|贴画/.test(text)) {
+    tags.add('贴纸/门贴')
+  }
+
+  if (/玉|玉石|泰山玉/.test(text)) {
+    tags.add('玉石')
+  }
+
+  if (/树脂|塑料|亚克力|pvc/.test(text)) {
+    tags.add('树脂/塑料')
+  }
+
+  if (/石板|原石|石碑|天然石|花岗岩|刻字|雕刻|路冲|镇宅|门口|庭院|室外/.test(text)) {
+    tags.add('石碑/石板')
+  }
+
+  if (/摆件|摆台|客厅|办公桌|玄关|室内/.test(text)) {
+    tags.add('室内摆件')
+  }
+
+  if (/室外|庭院|大门|门口|路冲/.test(text)) {
+    tags.add('室外/门口')
+  }
+
+  if (/镇宅|补角|缺角|靠山|风水|山海镇|八卦|天官赐福/.test(text)) {
+    tags.add('风水用途')
+  }
+
+  if (/定制|刻字|雕刻|订制/.test(text)) {
+    tags.add('可定制/刻字')
+  }
+
+  if (/挂件|悬挂|挂壁|挂饰/.test(text)) {
+    tags.add('悬挂')
+  }
+
+  if (/摆件|摆台|摆放/.test(text)) {
+    tags.add('摆放')
+  }
+
+  if (tags.size === 0) {
+    tags.add('未打标签')
+  }
+
+  return [...tags]
+}
+
+function normalizeTags(tags: unknown) {
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))]
+}
+
+const productProjection = {
+  run_id: 1,
+  goods_id: 1,
+  title: 1,
+  shop_name: 1,
+  mall: 1,
+  raw_search_item: 1,
+  image_url: 1,
+  image_local_file: 1,
+  detail_file: 1,
+  goods_url: 1,
+  rank: 1,
+  sales_tip_amount: 1,
+  raw_detail: 1,
+  min_wholesale_price_yuan: 1,
+  max_wholesale_price_yuan: 1,
+  sku_count: 1,
+  skus: 1,
+  property_texts: 1,
+  tags: 1,
+  tags_auto: 1,
+  tags_source: 1,
+  tags_updated_at: 1
 }
 
 function serializeShopProduct(product: SnapshotProduct) {
@@ -416,6 +529,79 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     return reply.type('application/json; charset=utf-8').send(createReadStream(detailPath))
   })
 
+  app.post('/api/trends/product-tags/auto', async (request) => {
+    const db = await getTrendsDb()
+    const compareRuns = await resolveCompareRuns(db, request.query)
+
+    if (!compareRuns) {
+      return { matched: 0, modified: 0 }
+    }
+
+    const runIds = [compareRuns.previousRun.run_id, compareRuns.currentRun.run_id]
+    const products = (await db
+      .collection<SnapshotProduct>('goods_snapshots')
+      .find({ run_id: { $in: runIds } })
+      .project(productProjection)
+      .toArray()) as SnapshotProduct[]
+    let matched = 0
+    let modified = 0
+
+    for (const product of products) {
+      if (product.tags_source === 'manual') {
+        continue
+      }
+
+      matched += 1
+      const tags = generateProductTags(product)
+      const result = await db.collection('goods_snapshots').updateOne(
+        { run_id: product.run_id, goods_id: product.goods_id, tags_source: { $ne: 'manual' } },
+        {
+          $set: {
+            tags,
+            tags_auto: tags,
+            tags_source: 'auto',
+            tags_updated_at: new Date()
+          }
+        }
+      )
+      modified += result.modifiedCount
+    }
+
+    return { matched, modified }
+  })
+
+  app.patch('/api/trends/products/:runId/:goodsId/tags', async (request, reply) => {
+    const params = request.params as { runId?: string; goodsId?: string }
+    const body = request.body as { tags?: unknown }
+    const tags = normalizeTags(body.tags)
+
+    if (!params.runId || !params.goodsId) {
+      return reply.status(400).send({ error: 'Invalid product tags request' })
+    }
+
+    const db = await getTrendsDb()
+    const result = await db.collection('goods_snapshots').findOneAndUpdate(
+      { run_id: params.runId, goods_id: params.goodsId },
+      {
+        $set: {
+          tags,
+          tags_source: 'manual',
+          tags_updated_at: new Date()
+        }
+      },
+      {
+        returnDocument: 'after',
+        projection: productProjection
+      }
+    )
+
+    if (!result) {
+      return reply.status(404).send({ error: 'Product not found' })
+    }
+
+    return serializeSnapshotProduct(result as unknown as SnapshotProduct)
+  })
+
   app.get('/api/trends/product-count', async () => {
     const db = await getTrendsDb()
     const points = await db
@@ -527,27 +713,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     const snapshots = (await db
       .collection<TopSalesTrend>('goods_snapshots')
       .find()
-      .project({
-        run_id: 1,
-        keyword: 1,
-        crawl_time: 1,
-        goods_id: 1,
-        title: 1,
-        shop_name: 1,
-        mall: 1,
-        raw_search_item: 1,
-        image_url: 1,
-        image_local_file: 1,
-        detail_file: 1,
-        goods_url: 1,
-        rank: 1,
-        sales_tip_amount: 1,
-        raw_detail: 1,
-        min_wholesale_price_yuan: 1,
-        max_wholesale_price_yuan: 1,
-        sku_count: 1,
-        skus: 1
-      })
+      .project({ ...productProjection, keyword: 1, crawl_time: 1 })
       .toArray()
     ) as TopSalesTrend[]
     const runMap = new Map<string, TopSalesTrend>()
@@ -588,48 +754,12 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     const previousProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: previousRun.run_id })
-      .project({
-        run_id: 1,
-        goods_id: 1,
-        title: 1,
-        shop_name: 1,
-        mall: 1,
-        raw_search_item: 1,
-        image_url: 1,
-        image_local_file: 1,
-        detail_file: 1,
-        goods_url: 1,
-        rank: 1,
-        sales_tip_amount: 1,
-        raw_detail: 1,
-        min_wholesale_price_yuan: 1,
-        max_wholesale_price_yuan: 1,
-        sku_count: 1,
-        skus: 1
-      })
+      .project(productProjection)
       .toArray()) as SnapshotProduct[]
     const currentProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: currentRun.run_id })
-      .project({
-        run_id: 1,
-        goods_id: 1,
-        title: 1,
-        shop_name: 1,
-        mall: 1,
-        raw_search_item: 1,
-        image_url: 1,
-        image_local_file: 1,
-        detail_file: 1,
-        goods_url: 1,
-        rank: 1,
-        sales_tip_amount: 1,
-        raw_detail: 1,
-        min_wholesale_price_yuan: 1,
-        max_wholesale_price_yuan: 1,
-        sku_count: 1,
-        skus: 1
-      })
+      .project(productProjection)
       .toArray()) as SnapshotProduct[]
 
     const previousById = new Map(previousProducts.map((product) => [product.goods_id, product]))
@@ -672,34 +802,15 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     }
 
     const { currentRun, previousRun } = compareRuns
-    const projection = {
-      run_id: 1,
-      goods_id: 1,
-      title: 1,
-      shop_name: 1,
-      mall: 1,
-      raw_search_item: 1,
-      image_url: 1,
-      image_local_file: 1,
-      detail_file: 1,
-      goods_url: 1,
-      rank: 1,
-      sales_tip_amount: 1,
-      raw_detail: 1,
-      min_wholesale_price_yuan: 1,
-      max_wholesale_price_yuan: 1,
-      sku_count: 1,
-      skus: 1
-    }
     const previousProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: previousRun.run_id })
-      .project(projection)
+      .project(productProjection)
       .toArray()) as SnapshotProduct[]
     const currentProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: currentRun.run_id })
-      .project(projection)
+      .project(productProjection)
       .toArray()) as SnapshotProduct[]
     const currentById = new Map(currentProducts.map((product) => [product.goods_id, product]))
     const products = previousProducts
@@ -721,6 +832,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
 
         return {
           goodsId: previousProduct.goods_id,
+          runId: currentProduct.run_id || previousProduct.run_id || '',
           title: currentProduct.title || previousProduct.title || '',
           shopName: currentProduct.shop_name || previousProduct.shop_name || '',
           mallUrl: getMallUrl(currentProduct) || getMallUrl(previousProduct),
@@ -733,6 +845,9 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
           skus: (currentProduct.skus ?? previousProduct.skus ?? []).map(serializeSku),
+          tags: currentProduct.tags ?? currentProduct.tags_auto ?? previousProduct.tags ?? previousProduct.tags_auto ?? [],
+          tagsAuto: currentProduct.tags_auto ?? previousProduct.tags_auto ?? [],
+          tagsSource: currentProduct.tags_source ?? previousProduct.tags_source ?? '',
           commentCount: getCommentCount(currentProduct) ?? getCommentCount(previousProduct),
           previous: serializeComparableProduct(previousProduct),
           current: serializeComparableProduct(currentProduct),
@@ -788,25 +903,7 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     const products = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: currentRun.run_id })
-      .project({
-        run_id: 1,
-        goods_id: 1,
-        title: 1,
-        shop_name: 1,
-        mall: 1,
-        raw_search_item: 1,
-        image_url: 1,
-        image_local_file: 1,
-        detail_file: 1,
-        goods_url: 1,
-        rank: 1,
-        sales_tip_amount: 1,
-        raw_detail: 1,
-        min_wholesale_price_yuan: 1,
-        max_wholesale_price_yuan: 1,
-        sku_count: 1,
-        skus: 1
-      })
+      .project(productProjection)
       .sort({ rank: 1, sales_tip_amount: -1 })
       .toArray()) as SnapshotProduct[]
 

@@ -417,6 +417,168 @@ textarea:focus {
   font-weight: 600;
 }
 
+.product-tag-filter,
+.product-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-tag-filter {
+  border-top: 1px solid #e3e9f2;
+  padding-top: 12px;
+}
+
+.product-tag-filter > span {
+  color: #637083;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.product-tag-filter button,
+.tag-filter-chip,
+.product-tags button {
+  border: 1px solid #cfd8e5;
+  border-radius: 999px;
+  background: #fff;
+  color: #253246;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-tag-filter button.active,
+.tag-filter-chip.active {
+  border-color: #2d7ff9;
+  background: #2d7ff9;
+  color: #fff;
+}
+
+.tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.tag-filter-chip input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: #2d7ff9;
+}
+
+.product-tag-filter small {
+  margin-left: 5px;
+  color: inherit;
+  opacity: 0.72;
+  font-size: 11px;
+}
+
+.product-tags button {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.product-tags-editor {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.product-tags-editor > span {
+  color: #526176;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.editable-tags,
+.tag-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.editable-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  padding: 4px 6px 4px 10px;
+}
+
+.editable-tag input,
+.tag-add-row input {
+  min-width: 88px;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
+}
+
+.editable-tag button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.tag-add-row input {
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 7px 10px;
+}
+
+.tag-add-row button {
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag-add-row .tag-save-button {
+  border-color: #2d7ff9;
+  background: #2d7ff9;
+  color: #fff;
+}
+
+.tag-add-row .tag-save-button:disabled {
+  border-color: #cfd8e5;
+  background: #e5e7eb;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.tag-add-row em {
+  color: #637083;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .diff-section {
   display: grid;
   gap: 12px;
