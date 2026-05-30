@@ -47,6 +47,8 @@ type DiffProduct = {
   imageUrl: string
   goodsUrl: string
   rank: number | null
+  displayIndex: number | null
+  source: string
   salesTipAmount: number | null
   commentCount: number | null
   minWholesalePriceYuan: number | null
@@ -78,14 +80,20 @@ type ProductOverlapItem = {
   goodsUrl: string
   skuCount: number | null
   commentCount: number | null
+  displayIndex: number | null
+  source: string
   previous: {
     rank: number | null
+    displayIndex: number | null
+    source: string
     salesTipAmount: number | null
     minWholesalePriceYuan: number | null
     maxWholesalePriceYuan: number | null
   }
   current: {
     rank: number | null
+    displayIndex: number | null
+    source: string
     salesTipAmount: number | null
     minWholesalePriceYuan: number | null
     maxWholesalePriceYuan: number | null
@@ -248,7 +256,7 @@ const activeRunDiff = computed(() => {
   return selectedMetric.value === 'shop' ? shopDiff.value : productDiff.value
 })
 
-function sortBySelectedMode<T extends { rank?: number | null; salesTipAmount?: number | null; commentCount?: number | null }>(products: T[]) {
+function sortBySelectedMode<T extends { displayIndex?: number | null; salesTipAmount?: number | null; commentCount?: number | null }>(products: T[]) {
   return [...products].sort((a, b) => {
     if (productSortMode.value === 'sales') {
       return (b.salesTipAmount ?? -1) - (a.salesTipAmount ?? -1)
@@ -258,7 +266,7 @@ function sortBySelectedMode<T extends { rank?: number | null; salesTipAmount?: n
       return (b.commentCount ?? -1) - (a.commentCount ?? -1)
     }
 
-    return (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+    return (a.displayIndex ?? Number.MAX_SAFE_INTEGER) - (b.displayIndex ?? Number.MAX_SAFE_INTEGER)
   })
 }
 
@@ -268,7 +276,7 @@ const overlapProducts = computed(() =>
   sortBySelectedMode(
     (productOverlap.value?.products ?? []).map((product) => ({
       ...product,
-      rank: product.current.rank,
+      displayIndex: product.current.displayIndex,
       salesTipAmount: product.current.salesTipAmount
     }))
   )
@@ -504,6 +512,10 @@ function formatOptionalChange(value: number | null, suffix = '') {
   return `${value > 0 ? '+' : ''}${value}${suffix}`
 }
 
+function formatSearchSource(source?: string) {
+  return source === 'shop_search' ? '店铺内搜索' : '全局搜索'
+}
+
 function toggleShopInfo(shopKey: string) {
   openedShopInfoKey.value = openedShopInfoKey.value === shopKey ? '' : shopKey
   openedShopProductKey.value = ''
@@ -691,7 +703,7 @@ onMounted(loadDashboard)
               <h3>{{ product.title || product.goodsId }}</h3>
               <strong>{{ formatPrice(product) }}</strong>
             </div>
-            <p class="muted">商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
+            <p class="muted">商品ID：{{ product.goodsId }} · 搜索结果排序：{{ product.displayIndex ?? '-' }} · {{ formatSearchSource(product.source) }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
             <p class="muted">
               店铺：
               <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
@@ -720,7 +732,7 @@ onMounted(loadDashboard)
               <h3>{{ product.title || product.goodsId }}</h3>
               <strong>{{ formatPrice(product) }}</strong>
             </div>
-            <p class="muted">商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
+            <p class="muted">商品ID：{{ product.goodsId }} · 搜索结果排序：{{ product.displayIndex ?? '-' }} · {{ formatSearchSource(product.source) }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
             <p class="muted">
               店铺：
               <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
@@ -750,7 +762,7 @@ onMounted(loadDashboard)
               <strong>{{ formatOptionalChange(product.changes.salesDelta) }} 销量</strong>
             </div>
             <p class="muted">
-              商品ID：{{ product.goodsId }} · 评论：{{ product.commentCount ?? '-' }} · 店铺：
+              商品ID：{{ product.goodsId }} · 搜索结果排序：{{ product.displayIndex ?? '-' }} · {{ formatSearchSource(product.source) }} · 评论：{{ product.commentCount ?? '-' }} · 店铺：
               <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">
                 {{ product.shopName || product.mallUrl }}
               </a>
@@ -758,10 +770,10 @@ onMounted(loadDashboard)
               · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <div class="overlap-metrics">
-              <span>排名：{{ product.previous.rank ?? '-' }} → {{ product.current.rank ?? '-' }}</span>
+              <span>搜索结果排序：{{ product.previous.displayIndex ?? '-' }} → {{ product.current.displayIndex ?? '-' }}</span>
               <span>销量：{{ product.previous.salesTipAmount ?? '-' }} → {{ product.current.salesTipAmount ?? '-' }}</span>
               <span>价格：{{ formatOverlapPrice(product.previous.minWholesalePriceYuan, product.previous.maxWholesalePriceYuan) }} → {{ formatOverlapPrice(product.current.minWholesalePriceYuan, product.current.maxWholesalePriceYuan) }}</span>
-              <span>排名变化：{{ formatOptionalChange(product.changes.rankDelta) }}</span>
+              <span>来源：{{ formatSearchSource(product.current.source) }}</span>
             </div>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
           </div>
@@ -783,7 +795,7 @@ onMounted(loadDashboard)
               <h3>{{ product.title || product.goodsId }}</h3>
               <strong>{{ formatPrice(product) }}</strong>
             </div>
-            <p class="muted">商品ID：{{ product.goodsId }} · 排名：{{ product.rank ?? '-' }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
+            <p class="muted">商品ID：{{ product.goodsId }} · 搜索结果排序：{{ product.displayIndex ?? '-' }} · {{ formatSearchSource(product.source) }} · 销量：{{ product.salesTipAmount ?? '-' }} · 评论：{{ product.commentCount ?? '-' }}</p>
             <p class="muted">
               店铺：
               <a v-if="product.mallUrl" class="inline-shop-link" :href="product.mallUrl" target="_blank" rel="noreferrer">

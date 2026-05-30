@@ -68,6 +68,8 @@ type SnapshotProduct = {
     mallUrl?: string
     storeHref?: string
     _mallUrl?: string
+    _displayIndex?: number
+    _source?: string
   }
 }
 
@@ -170,6 +172,8 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     imageUrl: product.image_url ?? '',
     goodsUrl: product.goods_url ?? '',
     rank: product.rank ?? null,
+    displayIndex: product.raw_search_item?._displayIndex ?? null,
+    source: product.raw_search_item?._source ?? '',
     salesTipAmount: getSalesTipAmount(product),
     commentCount: getCommentCount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
@@ -181,6 +185,8 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
 function serializeComparableProduct(product: SnapshotProduct) {
   return {
     rank: product.rank ?? null,
+    displayIndex: product.raw_search_item?._displayIndex ?? null,
+    source: product.raw_search_item?._source ?? '',
     salesTipAmount: getSalesTipAmount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null
@@ -560,6 +566,8 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           title: currentProduct.title || previousProduct.title || '',
           shopName: currentProduct.shop_name || previousProduct.shop_name || '',
           mallUrl: getMallUrl(currentProduct) || getMallUrl(previousProduct),
+          displayIndex: currentProduct.raw_search_item?._displayIndex ?? previousProduct.raw_search_item?._displayIndex ?? null,
+          source: currentProduct.raw_search_item?._source ?? previousProduct.raw_search_item?._source ?? '',
           imageUrl: currentProduct.image_url || previousProduct.image_url || '',
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
