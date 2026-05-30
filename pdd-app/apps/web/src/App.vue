@@ -45,6 +45,9 @@ type DiffProduct = {
   shopName: string
   mallUrl: string
   imageUrl: string
+  imageLocalFile: string
+  detailFile: string
+  detailUrl: string
   goodsUrl: string
   rank: number | null
   displayIndex: number | null
@@ -54,6 +57,20 @@ type DiffProduct = {
   minWholesalePriceYuan: number | null
   maxWholesalePriceYuan: number | null
   skuCount: number | null
+  skus: ProductSku[]
+}
+
+type ProductSku = {
+  skuId: string
+  specs: Array<{
+    key: string
+    value: string
+  }>
+  groupPriceYuan: number | null
+  wholesalePriceYuan: number | null
+  quantity: number | null
+  piece: number | null
+  thumbUrl: string
 }
 
 type ProductDiff = {
@@ -77,8 +94,12 @@ type ProductOverlapItem = {
   shopName: string
   mallUrl: string
   imageUrl: string
+  imageLocalFile: string
+  detailFile: string
+  detailUrl: string
   goodsUrl: string
   skuCount: number | null
+  skus: ProductSku[]
   commentCount: number | null
   displayIndex: number | null
   source: string
@@ -155,6 +176,7 @@ const shopDiff = ref<ShopDiff | null>(null)
 const selectedMetric = ref<TrendMetric>('product')
 const productResultTab = ref<'removed' | 'added' | 'overlap' | 'all'>('removed')
 const productSortMode = ref<'rank' | 'sales' | 'comments'>('rank')
+const shopSearchQuery = ref('')
 const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
 const openedShopInfoKey = ref('')
@@ -270,18 +292,28 @@ function sortBySelectedMode<T extends { displayIndex?: number | null; salesTipAm
   })
 }
 
-const removedProducts = computed(() => sortBySelectedMode(productDiff.value?.removed ?? []))
-const addedProducts = computed(() => sortBySelectedMode(productDiff.value?.added ?? []))
+function filterByShop<T extends { shopName?: string; mallUrl?: string }>(products: T[]) {
+  const query = shopSearchQuery.value.trim().toLowerCase()
+
+  if (!query) {
+    return products
+  }
+
+  return products.filter((product) => `${product.shopName ?? ''} ${product.mallUrl ?? ''}`.toLowerCase().includes(query))
+}
+
+const removedProducts = computed(() => sortBySelectedMode(filterByShop(productDiff.value?.removed ?? [])))
+const addedProducts = computed(() => sortBySelectedMode(filterByShop(productDiff.value?.added ?? [])))
 const overlapProducts = computed(() =>
   sortBySelectedMode(
-    (productOverlap.value?.products ?? []).map((product) => ({
+    filterByShop(productOverlap.value?.products ?? []).map((product) => ({
       ...product,
       displayIndex: product.current.displayIndex,
       salesTipAmount: product.current.salesTipAmount
     }))
   )
 )
-const allProducts = computed(() => sortBySelectedMode(productAll.value?.products ?? []))
+const allProducts = computed(() => sortBySelectedMode(filterByShop(productAll.value?.products ?? [])))
 
 const trendChart = computed(() => {
   const width = 720
@@ -516,6 +548,29 @@ function formatSearchSource(source?: string) {
   return source === 'shop_search' ? '店铺内搜索' : '全局搜索'
 }
 
+function formatSkuSpecs(sku: ProductSku) {
+  if (sku.specs.length === 0) {
+    return '默认规格'
+  }
+
+  return sku.specs.map((spec) => `${spec.key}：${spec.value}`).join(' / ')
+}
+
+function formatSkuPrice(sku: ProductSku) {
+  const wholesale = sku.wholesalePriceYuan === null ? '-' : `¥${sku.wholesalePriceYuan.toFixed(2)}`
+  const group = sku.groupPriceYuan === null ? '-' : `¥${sku.groupPriceYuan.toFixed(2)}`
+
+  return `批发价 ${wholesale} / 拼单价 ${group}`
+}
+
+function collapseSkuPanel(event: Event) {
+  const target = event.currentTarget
+
+  if (target instanceof HTMLElement) {
+    target.closest('details')?.removeAttribute('open')
+  }
+}
+
 function toggleShopInfo(shopKey: string) {
   openedShopInfoKey.value = openedShopInfoKey.value === shopKey ? '' : shopKey
   openedShopProductKey.value = ''
@@ -686,6 +741,10 @@ onMounted(loadDashboard)
         <button type="button" :class="{ active: productSortMode === 'sales' }" @click="productSortMode = 'sales'">
           按销量排序
         </button>
+        <label class="shop-search-control">
+          <span>搜索店铺</span>
+          <input v-model="shopSearchQuery" type="search" placeholder="输入店铺名" />
+        </label>
       </div>
 
       <section v-if="productResultTab === 'removed'" class="diff-section">
@@ -710,9 +769,28 @@ onMounted(loadDashboard)
                 {{ product.shopName || product.mallUrl }}
               </a>
               <span v-else>{{ product.shopName || '-' }}</span>
-              · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
+            <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
+            <p v-if="product.detailFile" class="local-file-path">本地文件：{{ product.detailFile }}</p>
+            <details class="sku-panel">
+              <summary>SKU：{{ product.skuCount ?? '-' }}</summary>
+              <button type="button" class="sku-collapse-button" @click="collapseSkuPanel">
+                收起 SKU
+              </button>
+              <div class="sku-panel-heading">
+                <strong>SKU 详情</strong>
+                <span>{{ product.skus.length }} 个规格</span>
+              </div>
+              <div v-for="sku in product.skus" :key="sku.skuId" class="sku-row">
+                <img v-if="sku.thumbUrl" :src="sku.thumbUrl" :alt="formatSkuSpecs(sku)" loading="lazy" />
+                <div>
+                  <strong>{{ formatSkuSpecs(sku) }}</strong>
+                  <span>{{ formatSkuPrice(sku) }}</span>
+                  <span>库存：{{ sku.quantity ?? '-' }} · 件数：{{ sku.piece ?? '-' }}</span>
+                </div>
+              </div>
+            </details>
           </div>
         </article>
       </section>
@@ -739,9 +817,28 @@ onMounted(loadDashboard)
                 {{ product.shopName || product.mallUrl }}
               </a>
               <span v-else>{{ product.shopName || '-' }}</span>
-              · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
+            <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
+            <p v-if="product.detailFile" class="local-file-path">本地文件：{{ product.detailFile }}</p>
+            <details class="sku-panel">
+              <summary>SKU：{{ product.skuCount ?? '-' }}</summary>
+              <button type="button" class="sku-collapse-button" @click="collapseSkuPanel">
+                收起 SKU
+              </button>
+              <div class="sku-panel-heading">
+                <strong>SKU 详情</strong>
+                <span>{{ product.skus.length }} 个规格</span>
+              </div>
+              <div v-for="sku in product.skus" :key="sku.skuId" class="sku-row">
+                <img v-if="sku.thumbUrl" :src="sku.thumbUrl" :alt="formatSkuSpecs(sku)" loading="lazy" />
+                <div>
+                  <strong>{{ formatSkuSpecs(sku) }}</strong>
+                  <span>{{ formatSkuPrice(sku) }}</span>
+                  <span>库存：{{ sku.quantity ?? '-' }} · 件数：{{ sku.piece ?? '-' }}</span>
+                </div>
+              </div>
+            </details>
           </div>
         </article>
       </section>
@@ -767,7 +864,6 @@ onMounted(loadDashboard)
                 {{ product.shopName || product.mallUrl }}
               </a>
               <span v-else>{{ product.shopName || '-' }}</span>
-              · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <div class="overlap-metrics">
               <span>搜索结果排序：{{ product.previous.displayIndex ?? '-' }} → {{ product.current.displayIndex ?? '-' }}</span>
@@ -776,6 +872,26 @@ onMounted(loadDashboard)
               <span>来源：{{ formatSearchSource(product.current.source) }}</span>
             </div>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
+            <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
+            <p v-if="product.detailFile" class="local-file-path">本地文件：{{ product.detailFile }}</p>
+            <details class="sku-panel">
+              <summary>SKU：{{ product.skuCount ?? '-' }}</summary>
+              <button type="button" class="sku-collapse-button" @click="collapseSkuPanel">
+                收起 SKU
+              </button>
+              <div class="sku-panel-heading">
+                <strong>SKU 详情</strong>
+                <span>{{ product.skus.length }} 个规格</span>
+              </div>
+              <div v-for="sku in product.skus" :key="sku.skuId" class="sku-row">
+                <img v-if="sku.thumbUrl" :src="sku.thumbUrl" :alt="formatSkuSpecs(sku)" loading="lazy" />
+                <div>
+                  <strong>{{ formatSkuSpecs(sku) }}</strong>
+                  <span>{{ formatSkuPrice(sku) }}</span>
+                  <span>库存：{{ sku.quantity ?? '-' }} · 件数：{{ sku.piece ?? '-' }}</span>
+                </div>
+              </div>
+            </details>
           </div>
         </article>
       </section>
@@ -802,9 +918,28 @@ onMounted(loadDashboard)
                 {{ product.shopName || product.mallUrl }}
               </a>
               <span v-else>{{ product.shopName || '-' }}</span>
-              · SKU：{{ product.skuCount ?? '-' }}
             </p>
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
+            <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
+            <p v-if="product.detailFile" class="local-file-path">本地文件：{{ product.detailFile }}</p>
+            <details class="sku-panel">
+              <summary>SKU：{{ product.skuCount ?? '-' }}</summary>
+              <button type="button" class="sku-collapse-button" @click="collapseSkuPanel">
+                收起 SKU
+              </button>
+              <div class="sku-panel-heading">
+                <strong>SKU 详情</strong>
+                <span>{{ product.skus.length }} 个规格</span>
+              </div>
+              <div v-for="sku in product.skus" :key="sku.skuId" class="sku-row">
+                <img v-if="sku.thumbUrl" :src="sku.thumbUrl" :alt="formatSkuSpecs(sku)" loading="lazy" />
+                <div>
+                  <strong>{{ formatSkuSpecs(sku) }}</strong>
+                  <span>{{ formatSkuPrice(sku) }}</span>
+                  <span>库存：{{ sku.quantity ?? '-' }} · 件数：{{ sku.piece ?? '-' }}</span>
+                </div>
+              </div>
+            </details>
           </div>
         </article>
       </section>

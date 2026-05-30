@@ -1,3 +1,5 @@
+import { createReadStream, existsSync } from 'node:fs'
+import path from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { getTrendsDb } from './db.js'
 
@@ -29,6 +31,7 @@ type TopSalesTrend = SnapshotProduct & {
 }
 
 type SnapshotProduct = {
+  run_id?: string
   goods_id: string
   title?: string
   shop_name?: string
@@ -40,12 +43,23 @@ type SnapshotProduct = {
     mall_url?: string
   }
   image_url?: string
+  image_local_file?: string
   goods_url?: string
+  detail_file?: string
   rank?: number
   sales_tip_amount?: number
   min_wholesale_price_yuan?: number
   max_wholesale_price_yuan?: number
   sku_count?: number
+  skus?: Array<{
+    sku_id?: string
+    specs?: Array<{ key?: string; value?: string }>
+    group_price_yuan?: number
+    wholesale_price_yuan?: number
+    quantity?: number | null
+    piece?: number | null
+    thumb_url?: string
+  }>
   raw_detail?: {
     queryGoodsDetail?: {
       result?: {
@@ -71,6 +85,52 @@ type SnapshotProduct = {
     _displayIndex?: number
     _source?: string
   }
+}
+
+type CrawlRun = {
+  run_id: string
+  folder?: string
+}
+
+function serializeSku(sku: NonNullable<SnapshotProduct['skus']>[number]) {
+  return {
+    skuId: sku.sku_id ?? '',
+    specs: (sku.specs ?? []).map((spec) => ({
+      key: spec.key ?? '',
+      value: spec.value ?? ''
+    })),
+    groupPriceYuan: sku.group_price_yuan ?? null,
+    wholesalePriceYuan: sku.wholesale_price_yuan ?? null,
+    quantity: sku.quantity ?? null,
+    piece: sku.piece ?? null,
+    thumbUrl: sku.thumb_url ?? ''
+  }
+}
+
+function buildLocalImageUrl(product: SnapshotProduct) {
+  if (!product.run_id || !product.image_local_file) {
+    return ''
+  }
+
+  const params = new URLSearchParams({
+    runId: product.run_id,
+    path: product.image_local_file
+  })
+
+  return `/api/assets/image?${params.toString()}`
+}
+
+function buildLocalDetailUrl(product: SnapshotProduct) {
+  if (!product.run_id || !product.goods_id || !product.detail_file) {
+    return ''
+  }
+
+  const params = new URLSearchParams({
+    runId: product.run_id,
+    goodsId: product.goods_id
+  })
+
+  return `/api/assets/detail?${params.toString()}`
 }
 
 function parseHumanAmount(value: string | number | undefined) {
@@ -169,7 +229,10 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     title: product.title ?? '',
     shopName: product.shop_name ?? '',
     mallUrl: getMallUrl(product),
-    imageUrl: product.image_url ?? '',
+    imageUrl: buildLocalImageUrl(product),
+    imageLocalFile: product.image_local_file ?? '',
+    detailFile: product.detail_file ?? '',
+    detailUrl: buildLocalDetailUrl(product),
     goodsUrl: product.goods_url ?? '',
     rank: product.rank ?? null,
     displayIndex: product.raw_search_item?._displayIndex ?? null,
@@ -178,7 +241,8 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     commentCount: getCommentCount(product),
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
-    skuCount: product.sku_count ?? null
+    skuCount: product.sku_count ?? null,
+    skus: (product.skus ?? []).map(serializeSku)
   }
 }
 
@@ -273,6 +337,85 @@ async function resolveCompareRuns(db: Awaited<ReturnType<typeof getTrendsDb>>, q
 }
 
 export async function registerTrendRoutes(app: FastifyInstance) {
+  app.get('/api/assets/image', async (request, reply) => {
+    const query = request.query as { runId?: string; path?: string }
+
+    if (!query.runId || !query.path || path.isAbsolute(query.path) || query.path.includes('..')) {
+      return reply.status(400).send({ error: 'Invalid image path' })
+    }
+
+    const db = await getTrendsDb()
+    const run = await db.collection<CrawlRun>('crawl_runs').findOne({ run_id: query.runId })
+
+    if (!run?.folder) {
+      return reply.status(404).send({ error: 'Run folder not found' })
+    }
+
+    const normalizedRelativePath = query.path.replace(/[\\/]+/g, path.sep)
+    const runFolder = path.resolve(run.folder)
+    const dataFolder = path.dirname(runFolder)
+    const candidates = [
+      path.resolve(runFolder, normalizedRelativePath),
+      path.resolve(dataFolder, normalizedRelativePath)
+    ]
+    const imagePath = candidates.find((candidate) => {
+      const insideRunFolder = candidate.startsWith(runFolder + path.sep)
+      const insideDataFolder = candidate.startsWith(dataFolder + path.sep)
+
+      return (insideRunFolder || insideDataFolder) && existsSync(candidate)
+    })
+
+    if (!imagePath) {
+      return reply.status(404).send({ error: 'Image not found' })
+    }
+
+    const extension = path.extname(imagePath).toLowerCase()
+    const contentType =
+      extension === '.png'
+        ? 'image/png'
+        : extension === '.webp'
+          ? 'image/webp'
+          : extension === '.gif'
+            ? 'image/gif'
+            : 'image/jpeg'
+
+    return reply.type(contentType).send(createReadStream(imagePath))
+  })
+
+  app.get('/api/assets/detail', async (request, reply) => {
+    const query = request.query as { runId?: string; goodsId?: string }
+
+    if (!query.runId || !query.goodsId) {
+      return reply.status(400).send({ error: 'Invalid detail request' })
+    }
+
+    const db = await getTrendsDb()
+    const product = await db
+      .collection<SnapshotProduct>('goods_snapshots')
+      .findOne({ run_id: query.runId, goods_id: query.goodsId }, { projection: { detail_file: 1 } })
+
+    if (!product?.detail_file || !path.isAbsolute(product.detail_file) || product.detail_file.includes('..')) {
+      return reply.status(404).send({ error: 'Detail file not found' })
+    }
+
+    const detailPath = path.resolve(product.detail_file)
+    const run = await db.collection<CrawlRun>('crawl_runs').findOne({ run_id: query.runId })
+
+    if (run?.folder) {
+      const runFolder = path.resolve(run.folder)
+
+      if (!detailPath.startsWith(runFolder + path.sep)) {
+        return reply.status(403).send({ error: 'Detail file is outside run folder' })
+      }
+    }
+
+    if (!existsSync(detailPath)) {
+      return reply.status(404).send({ error: 'Detail file not found' })
+    }
+
+    return reply.type('application/json; charset=utf-8').send(createReadStream(detailPath))
+  })
+
   app.get('/api/trends/product-count', async () => {
     const db = await getTrendsDb()
     const points = await db
@@ -394,13 +537,16 @@ export async function registerTrendRoutes(app: FastifyInstance) {
         mall: 1,
         raw_search_item: 1,
         image_url: 1,
+        image_local_file: 1,
+        detail_file: 1,
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
         raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
-        sku_count: 1
+        sku_count: 1,
+        skus: 1
       })
       .toArray()
     ) as TopSalesTrend[]
@@ -443,38 +589,46 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: previousRun.run_id })
       .project({
+        run_id: 1,
         goods_id: 1,
         title: 1,
         shop_name: 1,
         mall: 1,
         raw_search_item: 1,
         image_url: 1,
+        image_local_file: 1,
+        detail_file: 1,
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
         raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
-        sku_count: 1
+        sku_count: 1,
+        skus: 1
       })
       .toArray()) as SnapshotProduct[]
     const currentProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: currentRun.run_id })
       .project({
+        run_id: 1,
         goods_id: 1,
         title: 1,
         shop_name: 1,
         mall: 1,
         raw_search_item: 1,
         image_url: 1,
+        image_local_file: 1,
+        detail_file: 1,
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
         raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
-        sku_count: 1
+        sku_count: 1,
+        skus: 1
       })
       .toArray()) as SnapshotProduct[]
 
@@ -519,19 +673,23 @@ export async function registerTrendRoutes(app: FastifyInstance) {
 
     const { currentRun, previousRun } = compareRuns
     const projection = {
+      run_id: 1,
       goods_id: 1,
       title: 1,
       shop_name: 1,
       mall: 1,
       raw_search_item: 1,
       image_url: 1,
+      image_local_file: 1,
+      detail_file: 1,
       goods_url: 1,
       rank: 1,
       sales_tip_amount: 1,
       raw_detail: 1,
       min_wholesale_price_yuan: 1,
       max_wholesale_price_yuan: 1,
-      sku_count: 1
+      sku_count: 1,
+      skus: 1
     }
     const previousProducts = (await db
       .collection<SnapshotProduct>('goods_snapshots')
@@ -568,9 +726,13 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           mallUrl: getMallUrl(currentProduct) || getMallUrl(previousProduct),
           displayIndex: currentProduct.raw_search_item?._displayIndex ?? previousProduct.raw_search_item?._displayIndex ?? null,
           source: currentProduct.raw_search_item?._source ?? previousProduct.raw_search_item?._source ?? '',
-          imageUrl: currentProduct.image_url || previousProduct.image_url || '',
+          imageUrl: buildLocalImageUrl(currentProduct) || buildLocalImageUrl(previousProduct),
+          imageLocalFile: currentProduct.image_local_file || previousProduct.image_local_file || '',
+          detailFile: currentProduct.detail_file || previousProduct.detail_file || '',
+          detailUrl: buildLocalDetailUrl(currentProduct) || buildLocalDetailUrl(previousProduct),
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
+          skus: (currentProduct.skus ?? previousProduct.skus ?? []).map(serializeSku),
           commentCount: getCommentCount(currentProduct) ?? getCommentCount(previousProduct),
           previous: serializeComparableProduct(previousProduct),
           current: serializeComparableProduct(currentProduct),
@@ -627,19 +789,23 @@ export async function registerTrendRoutes(app: FastifyInstance) {
       .collection<SnapshotProduct>('goods_snapshots')
       .find({ run_id: currentRun.run_id })
       .project({
+        run_id: 1,
         goods_id: 1,
         title: 1,
         shop_name: 1,
         mall: 1,
         raw_search_item: 1,
         image_url: 1,
+        image_local_file: 1,
+        detail_file: 1,
         goods_url: 1,
         rank: 1,
         sales_tip_amount: 1,
         raw_detail: 1,
         min_wholesale_price_yuan: 1,
         max_wholesale_price_yuan: 1,
-        sku_count: 1
+        sku_count: 1,
+        skus: 1
       })
       .sort({ rank: 1, sales_tip_amount: -1 })
       .toArray()) as SnapshotProduct[]
