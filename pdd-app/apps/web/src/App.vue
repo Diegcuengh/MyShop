@@ -32,6 +32,10 @@ type TopSalesTrend = {
 
 type TrendMetric = 'product' | 'shop' | 'sales' | 'salesDelta'
 type ProductResultTab = 'removed' | 'added' | 'overlap' | 'all'
+type ProductFilterItem = {
+  material?: string
+  tags?: string[]
+}
 
 type ChartPoint = {
   runId: string
@@ -59,6 +63,9 @@ type DiffProduct = {
   minWholesalePriceYuan: number | null
   maxWholesalePriceYuan: number | null
   skuCount: number | null
+  material: string
+  materialAuto: string
+  materialSource: string
   tags: string[]
   tagsAuto: string[]
   tagsSource: string
@@ -106,6 +113,9 @@ type ProductOverlapItem = {
   goodsUrl: string
   skuCount: number | null
   skus: ProductSku[]
+  material: string
+  materialAuto: string
+  materialSource: string
   tags: string[]
   tagsAuto: string[]
   tagsSource: string
@@ -186,17 +196,21 @@ const selectedMetric = ref<TrendMetric>('product')
 const productResultTab = ref<ProductResultTab>('removed')
 const productSortMode = ref<'rank' | 'sales' | 'comments'>('rank')
 const shopSearchQuery = ref('')
+const selectedProductMaterial = ref('')
 const selectedProductTags = ref<string[]>([])
 const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
 const openedShopInfoKey = ref('')
 const openedShopProductKey = ref('')
+const previewImage = ref<{ src: string; title: string } | null>(null)
 const loading = ref(false)
 const diffLoading = ref(false)
 const tagAutoLoading = ref(false)
 const tagSavingKey = ref('')
+const materialSavingKey = ref('')
 const tagDrafts = ref<Record<string, string[]>>({})
 const newTagDrafts = ref<Record<string, string>>({})
+const materialDrafts = ref<Record<string, string>>({})
 const error = ref('')
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -316,12 +330,20 @@ function filterByShop<T extends { shopName?: string; mallUrl?: string }>(product
   return products.filter((product) => `${product.shopName ?? ''} ${product.mallUrl ?? ''}`.toLowerCase().includes(query))
 }
 
-function filterByTags<T extends { tags?: string[] }>(products: T[]) {
+function filterByTags<T extends ProductFilterItem>(products: T[]) {
   if (selectedProductTags.value.length === 0) {
     return products
   }
 
   return products.filter((product) => selectedProductTags.value.every((tag) => (product.tags ?? []).includes(tag)))
+}
+
+function filterByMaterial<T extends ProductFilterItem>(products: T[]) {
+  if (!selectedProductMaterial.value) {
+    return products
+  }
+
+  return products.filter((product) => (product.material || '未填写') === selectedProductMaterial.value)
 }
 
 const removedProductsBase = computed(() => filterByShop(productDiff.value?.removed ?? []))
@@ -335,7 +357,7 @@ const overlapProductsBase = computed(() =>
 )
 const allProductsBase = computed(() => filterByShop(productAll.value?.products ?? []))
 
-const activeProductListBeforeTagFilter = computed(() => {
+const activeProductListBeforeFilters = computed(() => {
   if (productResultTab.value === 'added') {
     return addedProductsBase.value
   }
@@ -351,6 +373,23 @@ const activeProductListBeforeTagFilter = computed(() => {
   return removedProductsBase.value
 })
 
+const productMaterialOptions = computed(() => {
+  const counts = new Map<string, number>()
+
+  for (const product of activeProductListBeforeFilters.value) {
+    const material = product.material || '未填写'
+    counts.set(material, (counts.get(material) ?? 0) + 1)
+  }
+
+  return [...counts.entries()]
+    .map(([material, count]) => ({ material, count }))
+    .sort((a, b) => b.count - a.count || a.material.localeCompare(b.material, 'zh-CN'))
+})
+
+const activeProductListBeforeTagFilter = computed<ProductFilterItem[]>(() =>
+  filterByMaterial(activeProductListBeforeFilters.value as ProductFilterItem[])
+)
+
 const productTagOptions = computed(() => {
   const counts = new Map<string, number>()
 
@@ -365,10 +404,10 @@ const productTagOptions = computed(() => {
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-CN'))
 })
 
-const removedProducts = computed(() => sortBySelectedMode(filterByTags(removedProductsBase.value)))
-const addedProducts = computed(() => sortBySelectedMode(filterByTags(addedProductsBase.value)))
-const overlapProducts = computed(() => sortBySelectedMode(filterByTags(overlapProductsBase.value)))
-const allProducts = computed(() => sortBySelectedMode(filterByTags(allProductsBase.value)))
+const removedProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(removedProductsBase.value))))
+const addedProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(addedProductsBase.value))))
+const overlapProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(overlapProductsBase.value))))
+const allProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(allProductsBase.value))))
 
 const trendChart = computed(() => {
   const width = 720
@@ -484,8 +523,10 @@ async function loadDiffs() {
     productAll.value = all
     shopDiff.value = shopDiffData
     clearProductTags()
+    clearProductMaterial()
     tagDrafts.value = {}
     newTagDrafts.value = {}
+    materialDrafts.value = {}
   } finally {
     tagAutoLoading.value = false
     diffLoading.value = false
@@ -652,9 +693,14 @@ function clearProductTags() {
   selectedProductTags.value = []
 }
 
+function clearProductMaterial() {
+  selectedProductMaterial.value = ''
+}
+
 function setProductResultTab(tab: ProductResultTab) {
   productResultTab.value = tab
   clearProductTags()
+  clearProductMaterial()
 }
 
 function getProductKey(product: { runId: string; goodsId: string }) {
@@ -665,8 +711,27 @@ function getInputValue(event: Event) {
   return event.target instanceof HTMLInputElement ? event.target.value : ''
 }
 
+function openImagePreview(src: string, title: string) {
+  previewImage.value = {
+    src,
+    title
+  }
+}
+
+function closeImagePreview() {
+  previewImage.value = null
+}
+
 function getEditableTags(product: DiffProduct | ProductOverlapItem) {
   return tagDrafts.value[getProductKey(product)] ?? product.tags
+}
+
+function getEditableMaterial(product: DiffProduct | ProductOverlapItem) {
+  return materialDrafts.value[getProductKey(product)] ?? product.material
+}
+
+function normalizeMaterial(material: string) {
+  return material.trim()
 }
 
 function normalizeEditableTags(tags: string[]) {
@@ -678,6 +743,17 @@ function hasTagChanges(product: DiffProduct | ProductOverlapItem) {
   const editableTags = normalizeEditableTags(getEditableTags(product))
 
   return currentTags.length !== editableTags.length || currentTags.some((tag, index) => tag !== editableTags[index])
+}
+
+function hasMaterialChanges(product: DiffProduct | ProductOverlapItem) {
+  return normalizeMaterial(product.material) !== normalizeMaterial(getEditableMaterial(product))
+}
+
+function setEditableMaterial(product: DiffProduct | ProductOverlapItem, value: string) {
+  materialDrafts.value = {
+    ...materialDrafts.value,
+    [getProductKey(product)]: value
+  }
 }
 
 function setEditableTag(product: DiffProduct | ProductOverlapItem, index: number, value: string) {
@@ -745,6 +821,28 @@ function updateLocalProductTags(runId: string, goodsId: string, tags: string[], 
   }
 }
 
+function updateLocalProductMaterial(runId: string, goodsId: string, material: string, materialSource: string) {
+  const updateList = (products: DiffProduct[]) => {
+    for (const product of products) {
+      if (product.runId === runId && product.goodsId === goodsId) {
+        product.material = material
+        product.materialSource = materialSource
+      }
+    }
+  }
+
+  updateList(productDiff.value?.removed ?? [])
+  updateList(productDiff.value?.added ?? [])
+  updateList(productAll.value?.products ?? [])
+
+  for (const product of productOverlap.value?.products ?? []) {
+    if (product.runId === runId && product.goodsId === goodsId) {
+      product.material = material
+      product.materialSource = materialSource
+    }
+  }
+}
+
 async function saveProductTags(product: DiffProduct | ProductOverlapItem) {
   if (!hasTagChanges(product)) {
     return
@@ -768,6 +866,32 @@ async function saveProductTags(product: DiffProduct | ProductOverlapItem) {
     error.value = requestError instanceof Error ? requestError.message : '保存标签失败'
   } finally {
     tagSavingKey.value = ''
+  }
+}
+
+async function saveProductMaterial(product: DiffProduct | ProductOverlapItem) {
+  if (!hasMaterialChanges(product)) {
+    return
+  }
+
+  const key = getProductKey(product)
+  materialSavingKey.value = key
+
+  try {
+    const updated = await apiSend<DiffProduct>(
+      `/api/trends/products/${encodeURIComponent(product.runId)}/${encodeURIComponent(product.goodsId)}/material`,
+      'PATCH',
+      {
+        material: normalizeMaterial(getEditableMaterial(product))
+      }
+    )
+    updateLocalProductMaterial(updated.runId, updated.goodsId, updated.material, updated.materialSource)
+    const { [key]: _removedMaterialDraft, ...remainingMaterialDrafts } = materialDrafts.value
+    materialDrafts.value = remainingMaterialDrafts
+  } catch (requestError) {
+    error.value = requestError instanceof Error ? requestError.message : '保存材质失败'
+  } finally {
+    materialSavingKey.value = ''
   }
 }
 
@@ -942,6 +1066,23 @@ onMounted(loadDashboard)
         </label>
       </div>
 
+      <div v-if="productMaterialOptions.length > 0" class="product-material-filter">
+        <span>材质</span>
+        <button type="button" :class="{ active: selectedProductMaterial === '' }" @click="clearProductMaterial">
+          全部
+        </button>
+        <button
+          v-for="option in productMaterialOptions"
+          :key="option.material"
+          type="button"
+          :class="{ active: selectedProductMaterial === option.material }"
+          @click="selectedProductMaterial = option.material"
+        >
+          {{ option.material }}
+          <small>{{ option.count }}</small>
+        </button>
+      </div>
+
       <div v-if="productTagOptions.length > 0" class="product-tag-filter">
         <span>标签</span>
         <button type="button" :class="{ active: selectedProductTags.length === 0 }" @click="clearProductTags">
@@ -968,7 +1109,14 @@ onMounted(loadDashboard)
           <span>{{ productDiff?.removed.length ?? 0 }} 个</span>
         </div>
         <article v-for="product in removedProducts" :key="product.goodsId" class="diff-card">
-          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          <button
+            v-if="product.imageUrl"
+            type="button"
+            class="product-image-button"
+            @click="openImagePreview(product.imageUrl, product.title || product.goodsId)"
+          >
+            <img :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          </button>
           <div class="diff-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
@@ -984,6 +1132,24 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div class="product-material-editor">
+              <span>材质</span>
+              <input
+                :value="getEditableMaterial(product)"
+                type="text"
+                placeholder="未填写"
+                @input="setEditableMaterial(product, getInputValue($event))"
+              />
+              <button
+                type="button"
+                class="material-save-button"
+                :disabled="materialSavingKey === getProductKey(product) || !hasMaterialChanges(product)"
+                @click="saveProductMaterial(product)"
+              >
+                保存材质
+              </button>
+              <em>{{ product.materialSource === 'manual' ? '人工' : '属性' }}</em>
+            </div>
             <div class="product-tags-editor">
               <span>标签</span>
               <div class="editable-tags">
@@ -1047,7 +1213,14 @@ onMounted(loadDashboard)
           <span>{{ productDiff?.added.length ?? 0 }} 个</span>
         </div>
         <article v-for="product in addedProducts" :key="product.goodsId" class="diff-card">
-          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          <button
+            v-if="product.imageUrl"
+            type="button"
+            class="product-image-button"
+            @click="openImagePreview(product.imageUrl, product.title || product.goodsId)"
+          >
+            <img :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          </button>
           <div class="diff-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
@@ -1063,6 +1236,24 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div class="product-material-editor">
+              <span>材质</span>
+              <input
+                :value="getEditableMaterial(product)"
+                type="text"
+                placeholder="未填写"
+                @input="setEditableMaterial(product, getInputValue($event))"
+              />
+              <button
+                type="button"
+                class="material-save-button"
+                :disabled="materialSavingKey === getProductKey(product) || !hasMaterialChanges(product)"
+                @click="saveProductMaterial(product)"
+              >
+                保存材质
+              </button>
+              <em>{{ product.materialSource === 'manual' ? '人工' : '属性' }}</em>
+            </div>
             <div class="product-tags-editor">
               <span>标签</span>
               <div class="editable-tags">
@@ -1126,7 +1317,14 @@ onMounted(loadDashboard)
           <span>{{ productOverlap?.products.length ?? 0 }} 个</span>
         </div>
         <article v-for="product in overlapProducts" :key="product.goodsId" class="overlap-card">
-          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          <button
+            v-if="product.imageUrl"
+            type="button"
+            class="product-image-button"
+            @click="openImagePreview(product.imageUrl, product.title || product.goodsId)"
+          >
+            <img :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          </button>
           <div class="overlap-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
@@ -1147,6 +1345,24 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div class="product-material-editor">
+              <span>材质</span>
+              <input
+                :value="getEditableMaterial(product)"
+                type="text"
+                placeholder="未填写"
+                @input="setEditableMaterial(product, getInputValue($event))"
+              />
+              <button
+                type="button"
+                class="material-save-button"
+                :disabled="materialSavingKey === getProductKey(product) || !hasMaterialChanges(product)"
+                @click="saveProductMaterial(product)"
+              >
+                保存材质
+              </button>
+              <em>{{ product.materialSource === 'manual' ? '人工' : '属性' }}</em>
+            </div>
             <div class="product-tags-editor">
               <span>标签</span>
               <div class="editable-tags">
@@ -1210,7 +1426,14 @@ onMounted(loadDashboard)
           <span>{{ productAll?.products.length ?? 0 }} 个</span>
         </div>
         <article v-for="product in allProducts" :key="product.goodsId" class="diff-card">
-          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          <button
+            v-if="product.imageUrl"
+            type="button"
+            class="product-image-button"
+            @click="openImagePreview(product.imageUrl, product.title || product.goodsId)"
+          >
+            <img :src="product.imageUrl" :alt="product.title" loading="lazy" />
+          </button>
           <div class="diff-card-body">
             <div class="diff-card-title">
               <h3>{{ product.title || product.goodsId }}</h3>
@@ -1226,6 +1449,24 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div class="product-material-editor">
+              <span>材质</span>
+              <input
+                :value="getEditableMaterial(product)"
+                type="text"
+                placeholder="未填写"
+                @input="setEditableMaterial(product, getInputValue($event))"
+              />
+              <button
+                type="button"
+                class="material-save-button"
+                :disabled="materialSavingKey === getProductKey(product) || !hasMaterialChanges(product)"
+                @click="saveProductMaterial(product)"
+              >
+                保存材质
+              </button>
+              <em>{{ product.materialSource === 'manual' ? '人工' : '属性' }}</em>
+            </div>
             <div class="product-tags-editor">
               <span>标签</span>
               <div class="editable-tags">
@@ -1476,7 +1717,14 @@ onMounted(loadDashboard)
 
       <div class="sales-grid">
         <article v-for="point in topSalesTrendPoints" :key="point.runId" class="sales-card">
-          <img v-if="point.product.imageUrl" :src="point.product.imageUrl" :alt="point.product.title" loading="lazy" />
+          <button
+            v-if="point.product.imageUrl"
+            type="button"
+            class="product-image-button"
+            @click="openImagePreview(point.product.imageUrl, point.product.title || point.product.goodsId)"
+          >
+            <img :src="point.product.imageUrl" :alt="point.product.title" loading="lazy" />
+          </button>
           <div class="sales-card-body">
             <div>
               <p class="eyebrow">{{ formatDate(point.crawlTime) }}</p>
@@ -1516,6 +1764,16 @@ onMounted(loadDashboard)
         </article>
       </div>
     </section>
+
+    <div v-if="previewImage" class="image-preview-overlay" role="dialog" aria-modal="true" @click.self="closeImagePreview">
+      <div class="image-preview-dialog">
+        <div class="image-preview-toolbar">
+          <strong>{{ previewImage.title }}</strong>
+          <button type="button" aria-label="关闭原图预览" @click="closeImagePreview">关闭</button>
+        </div>
+        <img :src="previewImage.src" :alt="previewImage.title" />
+      </div>
+    </div>
   </main>
 </template>
 

@@ -417,6 +417,7 @@ textarea:focus {
   font-weight: 600;
 }
 
+.product-material-filter,
 .product-tag-filter,
 .product-tags {
   display: flex;
@@ -425,17 +426,20 @@ textarea:focus {
   gap: 8px;
 }
 
+.product-material-filter,
 .product-tag-filter {
   border-top: 1px solid #e3e9f2;
   padding-top: 12px;
 }
 
+.product-material-filter > span,
 .product-tag-filter > span {
   color: #637083;
   font-size: 13px;
   font-weight: 700;
 }
 
+.product-material-filter button,
 .product-tag-filter button,
 .tag-filter-chip,
 .product-tags button {
@@ -448,6 +452,7 @@ textarea:focus {
   font-weight: 800;
 }
 
+.product-material-filter button.active,
 .product-tag-filter button.active,
 .tag-filter-chip.active {
   border-color: #2d7ff9;
@@ -469,11 +474,67 @@ textarea:focus {
   accent-color: #2d7ff9;
 }
 
+.product-material-filter small,
 .product-tag-filter small {
   margin-left: 5px;
   color: inherit;
   opacity: 0.72;
   font-size: 11px;
+}
+
+.product-material-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.product-material-editor > span {
+  color: #526176;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.product-material-editor input {
+  min-width: 140px;
+  flex: 1;
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
+}
+
+.product-material-editor button {
+  border: 1px solid #2d7ff9;
+  border-radius: 8px;
+  background: #2d7ff9;
+  color: #fff;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-material-editor button:disabled {
+  border-color: #cfd8e5;
+  background: #e5e7eb;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.product-material-editor em {
+  color: #637083;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .product-tags button {
@@ -593,7 +654,25 @@ textarea:focus {
   padding: 12px;
 }
 
-.diff-card img {
+.product-image-button {
+  width: fit-content;
+  height: fit-content;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.product-image-button:focus-visible {
+  outline: 3px solid rgba(45, 127, 249, 0.35);
+  outline-offset: 3px;
+}
+
+.product-image-button img {
+  display: block;
+}
+
+.diff-card .product-image-button img {
   width: 96px;
   height: 96px;
   border-radius: 6px;
@@ -744,7 +823,7 @@ textarea:focus {
   padding: 12px;
 }
 
-.overlap-card img {
+.overlap-card .product-image-button img {
   width: 96px;
   height: 96px;
   border-radius: 6px;
@@ -800,12 +879,72 @@ textarea:focus {
   padding: 12px;
 }
 
-.sales-card img {
+.sales-card .product-image-button img {
   width: 112px;
   height: 112px;
   border-radius: 6px;
   object-fit: cover;
   background: #eef2f7;
+}
+
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.72);
+  padding: 24px;
+}
+
+.image-preview-dialog {
+  max-width: min(96vw, 1200px);
+  max-height: 94vh;
+  overflow: auto;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.35);
+}
+
+.image-preview-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e3e9f2;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.image-preview-toolbar strong {
+  overflow: hidden;
+  color: #0b1526;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-preview-toolbar button {
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #253246;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.image-preview-dialog > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(94vh - 48px);
+  margin: 0 auto;
+  object-fit: contain;
 }
 
 .sales-card-body {
@@ -1114,7 +1253,7 @@ textarea:focus {
     grid-template-columns: 76px minmax(0, 1fr);
   }
 
-  .diff-card img {
+  .diff-card .product-image-button img {
     width: 76px;
     height: 76px;
   }
@@ -1123,7 +1262,7 @@ textarea:focus {
     grid-template-columns: 76px minmax(0, 1fr);
   }
 
-  .overlap-card img {
+  .overlap-card .product-image-button img {
     width: 76px;
     height: 76px;
   }
@@ -1136,7 +1275,7 @@ textarea:focus {
     grid-template-columns: 76px minmax(0, 1fr);
   }
 
-  .sales-card img {
+  .sales-card .product-image-button img {
     width: 76px;
     height: 76px;
   }

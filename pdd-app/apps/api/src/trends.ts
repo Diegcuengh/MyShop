@@ -55,6 +55,10 @@ type SnapshotProduct = {
   tags_auto?: string[]
   tags_source?: 'auto' | 'manual'
   tags_updated_at?: Date
+  material?: string
+  material_auto?: string
+  material_source?: 'auto' | 'manual'
+  material_updated_at?: Date
   property_texts?: Array<{
     propertyName?: string
     propertyValues?: string[]
@@ -85,6 +89,7 @@ type SnapshotProduct = {
         totalText?: string
       }
     }
+    queryGoodsPropertyInfo?: unknown
   }
   raw_search_item?: {
     mallUrl?: string
@@ -251,6 +256,9 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     minWholesalePriceYuan: product.min_wholesale_price_yuan ?? null,
     maxWholesalePriceYuan: product.max_wholesale_price_yuan ?? null,
     skuCount: product.sku_count ?? null,
+    material: product.material ?? product.material_auto ?? '',
+    materialAuto: product.material_auto ?? '',
+    materialSource: product.material_source ?? '',
     tags: product.tags ?? product.tags_auto ?? [],
     tagsAuto: product.tags_auto ?? [],
     tagsSource: product.tags_source ?? '',
@@ -300,6 +308,7 @@ function getProductText(product: SnapshotProduct) {
 
 function generateProductTags(product: SnapshotProduct) {
   const text = getProductText(product)
+  const material = normalizeMaterial(product.material ?? product.material_auto ?? extractMaterialFromProperties(product))
   const tags = new Set<string>()
 
   if (/铜|黄铜|纯铜|铜牌|铜挂件/.test(text)) {
@@ -319,7 +328,7 @@ function generateProductTags(product: SnapshotProduct) {
     tags.add('树脂/塑料')
   }
 
-  if (/石板|原石|石碑|天然石|花岗岩|刻字|雕刻|路冲|镇宅|门口|庭院|室外/.test(text)) {
+  if (allowsStoneBoardTag(material) && /石板|原石|石碑|天然石|花岗岩|刻字|雕刻|路冲|镇宅|门口|庭院|室外/.test(text)) {
     tags.add('石碑/石板')
   }
 
@@ -354,12 +363,74 @@ function generateProductTags(product: SnapshotProduct) {
   return [...tags]
 }
 
+function allowsStoneBoardTag(material: string) {
+  if (!material) {
+    return true
+  }
+
+  if (/玉|黄铜|铜|树脂|塑料|亚克力|pvc|木|木质|木制/.test(material)) {
+    return false
+  }
+
+  return /石|青石|花岗岩|大理石|天然石|原石/.test(material)
+}
+
+function extractMaterialFromProperties(product: SnapshotProduct) {
+  const detailProperties = normalizePropertyInfo(product.raw_detail?.queryGoodsPropertyInfo)
+  const properties = [
+    ...detailProperties,
+    ...(product.property_texts ?? [])
+  ]
+  const materialProperty = properties.find((property) => {
+    const name = (property.propertyName ?? '').trim().toLowerCase()
+
+    return /材质|材料|面料|主要材质|主体材质|产品材质|工艺材质|质地/.test(name)
+  })
+  const values = materialProperty?.propertyValues?.map((value) => value.trim()).filter(Boolean) ?? []
+
+  return [...new Set(values)].join(' / ')
+}
+
+function normalizePropertyInfo(value: unknown): Array<{ propertyName?: string; propertyValues?: string[] }> {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is { propertyName?: string; propertyValues?: string[] } => Boolean(item && typeof item === 'object'))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+
+  const record = value as {
+    propertyName?: string
+    propertyValues?: string[]
+    result?: unknown
+    properties?: unknown
+    data?: unknown
+    goodsPropertyTexts?: unknown
+  }
+
+  if (record.propertyName || record.propertyValues) {
+    return [record]
+  }
+
+  return [
+    ...normalizePropertyInfo(record.result),
+    ...normalizePropertyInfo(record.properties),
+    ...normalizePropertyInfo(record.data),
+    ...normalizePropertyInfo(record.goodsPropertyTexts)
+  ]
+}
+
 function normalizeTags(tags: unknown) {
   if (!Array.isArray(tags)) {
     return []
   }
 
   return [...new Set(tags.map((tag) => String(tag).trim()).filter(Boolean))]
+}
+
+function normalizeMaterial(material: unknown) {
+  return String(material ?? '').trim()
 }
 
 const productProjection = {
@@ -384,7 +455,11 @@ const productProjection = {
   tags: 1,
   tags_auto: 1,
   tags_source: 1,
-  tags_updated_at: 1
+  tags_updated_at: 1,
+  material: 1,
+  material_auto: 1,
+  material_source: 1,
+  material_updated_at: 1
 }
 
 function serializeShopProduct(product: SnapshotProduct) {
@@ -547,21 +622,33 @@ export async function registerTrendRoutes(app: FastifyInstance) {
     let modified = 0
 
     for (const product of products) {
-      if (product.tags_source === 'manual') {
+      matched += 1
+      const tags = generateProductTags(product)
+      const material = extractMaterialFromProperties(product)
+      const setFields: Partial<SnapshotProduct> = {}
+
+      if (product.tags_source !== 'manual') {
+        setFields.tags = tags
+        setFields.tags_auto = tags
+        setFields.tags_source = 'auto'
+        setFields.tags_updated_at = new Date()
+      }
+
+      if (product.material_source !== 'manual') {
+        setFields.material = material
+        setFields.material_auto = material
+        setFields.material_source = 'auto'
+        setFields.material_updated_at = new Date()
+      }
+
+      if (Object.keys(setFields).length === 0) {
         continue
       }
 
-      matched += 1
-      const tags = generateProductTags(product)
       const result = await db.collection('goods_snapshots').updateOne(
-        { run_id: product.run_id, goods_id: product.goods_id, tags_source: { $ne: 'manual' } },
+        { run_id: product.run_id, goods_id: product.goods_id },
         {
-          $set: {
-            tags,
-            tags_auto: tags,
-            tags_source: 'auto',
-            tags_updated_at: new Date()
-          }
+          $set: setFields
         }
       )
       modified += result.modifiedCount
@@ -587,6 +674,38 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           tags,
           tags_source: 'manual',
           tags_updated_at: new Date()
+        }
+      },
+      {
+        returnDocument: 'after',
+        projection: productProjection
+      }
+    )
+
+    if (!result) {
+      return reply.status(404).send({ error: 'Product not found' })
+    }
+
+    return serializeSnapshotProduct(result as unknown as SnapshotProduct)
+  })
+
+  app.patch('/api/trends/products/:runId/:goodsId/material', async (request, reply) => {
+    const params = request.params as { runId?: string; goodsId?: string }
+    const body = request.body as { material?: unknown }
+    const material = normalizeMaterial(body.material)
+
+    if (!params.runId || !params.goodsId) {
+      return reply.status(400).send({ error: 'Invalid product material request' })
+    }
+
+    const db = await getTrendsDb()
+    const result = await db.collection('goods_snapshots').findOneAndUpdate(
+      { run_id: params.runId, goods_id: params.goodsId },
+      {
+        $set: {
+          material,
+          material_source: 'manual',
+          material_updated_at: new Date()
         }
       },
       {
@@ -845,6 +964,9 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           goodsUrl: currentProduct.goods_url || previousProduct.goods_url || '',
           skuCount: currentProduct.sku_count ?? previousProduct.sku_count ?? null,
           skus: (currentProduct.skus ?? previousProduct.skus ?? []).map(serializeSku),
+          material: currentProduct.material ?? currentProduct.material_auto ?? previousProduct.material ?? previousProduct.material_auto ?? '',
+          materialAuto: currentProduct.material_auto ?? previousProduct.material_auto ?? '',
+          materialSource: currentProduct.material_source ?? previousProduct.material_source ?? '',
           tags: currentProduct.tags ?? currentProduct.tags_auto ?? previousProduct.tags ?? previousProduct.tags_auto ?? [],
           tagsAuto: currentProduct.tags_auto ?? previousProduct.tags_auto ?? [],
           tagsSource: currentProduct.tags_source ?? previousProduct.tags_source ?? '',
