@@ -30,6 +30,14 @@ type TopSalesTrend = SnapshotProduct & {
   crawl_time: Date
 }
 
+type GoodsMediaInfo = {
+  url?: string
+  videoUrl?: string | null
+  priority?: number
+  type?: number
+  url_localFile?: string
+}
+
 type SnapshotProduct = {
   run_id?: string
   goods_id: string
@@ -76,6 +84,7 @@ type SnapshotProduct = {
     queryGoodsDetail?: {
       result?: {
         salesTipAmount?: string | number
+        goodsCarouselInfos?: GoodsMediaInfo[]
       }
     }
     queryGoodsShareInfo?: {
@@ -125,9 +134,17 @@ function buildLocalImageUrl(product: SnapshotProduct) {
     return ''
   }
 
+  return buildLocalAssetUrl(product.run_id, product.image_local_file)
+}
+
+function buildLocalAssetUrl(runId: string | undefined, localFile: string | undefined) {
+  if (!runId || !localFile) {
+    return ''
+  }
+
   const params = new URLSearchParams({
-    runId: product.run_id,
-    path: product.image_local_file
+    runId,
+    path: localFile
   })
 
   return `/api/assets/image?${params.toString()}`
@@ -259,11 +276,32 @@ function serializeSnapshotProduct(product: SnapshotProduct) {
     material: product.material ?? product.material_auto ?? '',
     materialAuto: product.material_auto ?? '',
     materialSource: product.material_source ?? '',
+    carouselMedia: serializeMediaList(product, product.raw_detail?.queryGoodsDetail?.result?.goodsCarouselInfos ?? []),
+    detailMedia: serializeMediaList(product, extractGoodsPropertyInfos(product.raw_detail?.queryGoodsPropertyInfo)),
     tags: product.tags ?? product.tags_auto ?? [],
     tagsAuto: product.tags_auto ?? [],
     tagsSource: product.tags_source ?? '',
     skus: (product.skus ?? []).map(serializeSku)
   }
+}
+
+function serializeMediaList(product: SnapshotProduct, mediaList: GoodsMediaInfo[]) {
+  return [...mediaList]
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+    .map((media, index) => {
+      const videoSrc = media.videoUrl ?? ''
+      const imageSrc = buildLocalAssetUrl(product.run_id, media.url_localFile) || media.url || ''
+      const type = videoSrc ? 'video' : 'image'
+
+      return {
+        id: `${product.goods_id}:${type}:${media.priority ?? index}:${media.url_localFile ?? media.url ?? videoSrc}`,
+        type,
+        imageSrc,
+        videoSrc,
+        title: `${product.title ?? product.goods_id} ${index + 1}`
+      }
+    })
+    .filter((media) => media.imageSrc || media.videoSrc)
 }
 
 function serializeComparableProduct(product: SnapshotProduct) {
@@ -389,6 +427,29 @@ function extractMaterialFromProperties(product: SnapshotProduct) {
   const values = materialProperty?.propertyValues?.map((value) => value.trim()).filter(Boolean) ?? []
 
   return [...new Set(values)].join(' / ')
+}
+
+function extractGoodsPropertyInfos(value: unknown): GoodsMediaInfo[] {
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+
+  const record = value as {
+    result?: {
+      goodsPropertyInfos?: GoodsMediaInfo[]
+    }
+    goodsPropertyInfos?: GoodsMediaInfo[]
+  }
+
+  if (Array.isArray(record.goodsPropertyInfos)) {
+    return record.goodsPropertyInfos
+  }
+
+  if (Array.isArray(record.result?.goodsPropertyInfos)) {
+    return record.result.goodsPropertyInfos
+  }
+
+  return []
 }
 
 function normalizePropertyInfo(value: unknown): Array<{ propertyName?: string; propertyValues?: string[] }> {
@@ -565,7 +626,11 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           ? 'image/webp'
           : extension === '.gif'
             ? 'image/gif'
-            : 'image/jpeg'
+            : extension === '.mp4'
+              ? 'video/mp4'
+              : extension === '.webm'
+                ? 'video/webm'
+                : 'image/jpeg'
 
     return reply.type(contentType).send(createReadStream(imagePath))
   })
@@ -967,6 +1032,14 @@ export async function registerTrendRoutes(app: FastifyInstance) {
           material: currentProduct.material ?? currentProduct.material_auto ?? previousProduct.material ?? previousProduct.material_auto ?? '',
           materialAuto: currentProduct.material_auto ?? previousProduct.material_auto ?? '',
           materialSource: currentProduct.material_source ?? previousProduct.material_source ?? '',
+          carouselMedia:
+            serializeMediaList(currentProduct, currentProduct.raw_detail?.queryGoodsDetail?.result?.goodsCarouselInfos ?? []).length > 0
+              ? serializeMediaList(currentProduct, currentProduct.raw_detail?.queryGoodsDetail?.result?.goodsCarouselInfos ?? [])
+              : serializeMediaList(previousProduct, previousProduct.raw_detail?.queryGoodsDetail?.result?.goodsCarouselInfos ?? []),
+          detailMedia:
+            serializeMediaList(currentProduct, extractGoodsPropertyInfos(currentProduct.raw_detail?.queryGoodsPropertyInfo)).length > 0
+              ? serializeMediaList(currentProduct, extractGoodsPropertyInfos(currentProduct.raw_detail?.queryGoodsPropertyInfo))
+              : serializeMediaList(previousProduct, extractGoodsPropertyInfos(previousProduct.raw_detail?.queryGoodsPropertyInfo)),
           tags: currentProduct.tags ?? currentProduct.tags_auto ?? previousProduct.tags ?? previousProduct.tags_auto ?? [],
           tagsAuto: currentProduct.tags_auto ?? previousProduct.tags_auto ?? [],
           tagsSource: currentProduct.tags_source ?? previousProduct.tags_source ?? '',

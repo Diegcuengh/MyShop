@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+﻿<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 type ProductCountTrend = {
   runId: string
@@ -37,6 +37,14 @@ type ProductFilterItem = {
   tags?: string[]
 }
 
+type ProductMedia = {
+  id: string
+  type: 'image' | 'video'
+  imageSrc: string
+  videoSrc: string
+  title: string
+}
+
 type ChartPoint = {
   runId: string
   keyword: string
@@ -66,6 +74,8 @@ type DiffProduct = {
   material: string
   materialAuto: string
   materialSource: string
+  carouselMedia: ProductMedia[]
+  detailMedia: ProductMedia[]
   tags: string[]
   tagsAuto: string[]
   tagsSource: string
@@ -116,6 +126,8 @@ type ProductOverlapItem = {
   material: string
   materialAuto: string
   materialSource: string
+  carouselMedia: ProductMedia[]
+  detailMedia: ProductMedia[]
   tags: string[]
   tagsAuto: string[]
   tagsSource: string
@@ -202,7 +214,7 @@ const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
 const openedShopInfoKey = ref('')
 const openedShopProductKey = ref('')
-const previewImage = ref<{ src: string; title: string } | null>(null)
+const previewMedia = ref<{ type: 'image' | 'video'; src: string; poster: string; title: string } | null>(null)
 const loading = ref(false)
 const diffLoading = ref(false)
 const tagAutoLoading = ref(false)
@@ -712,14 +724,31 @@ function getInputValue(event: Event) {
 }
 
 function openImagePreview(src: string, title: string) {
-  previewImage.value = {
+  previewMedia.value = {
+    type: 'image',
     src,
+    poster: '',
     title
   }
 }
 
-function closeImagePreview() {
-  previewImage.value = null
+function openMediaPreview(media: ProductMedia, fallbackTitle: string) {
+  previewMedia.value = {
+    type: media.type,
+    src: media.type === 'video' ? media.videoSrc : media.imageSrc,
+    poster: media.imageSrc,
+    title: media.title || fallbackTitle
+  }
+}
+
+function closeMediaPreview() {
+  previewMedia.value = null
+}
+
+function handlePreviewKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && previewMedia.value) {
+    closeMediaPreview()
+  }
 }
 
 function getEditableTags(product: DiffProduct | ProductOverlapItem) {
@@ -904,7 +933,14 @@ function toggleShopProduct(productKey: string) {
   openedShopProductKey.value = openedShopProductKey.value === productKey ? '' : productKey
 }
 
-onMounted(loadDashboard)
+onMounted(() => {
+  window.addEventListener('keydown', handlePreviewKeydown)
+  loadDashboard()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handlePreviewKeydown)
+})
 </script>
 
 <template>
@@ -1132,6 +1168,34 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+              <span>轮播图</span>
+              <button
+                v-for="media in product.carouselMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
+            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+              <span>详情页图</span>
+              <button
+                v-for="media in product.detailMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
             <div class="product-material-editor">
               <span>材质</span>
               <input
@@ -1236,6 +1300,34 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+              <span>轮播图</span>
+              <button
+                v-for="media in product.carouselMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
+            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+              <span>详情页图</span>
+              <button
+                v-for="media in product.detailMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
             <div class="product-material-editor">
               <span>材质</span>
               <input
@@ -1345,6 +1437,34 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+              <span>轮播图</span>
+              <button
+                v-for="media in product.carouselMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
+            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+              <span>详情页图</span>
+              <button
+                v-for="media in product.detailMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
             <div class="product-material-editor">
               <span>材质</span>
               <input
@@ -1449,6 +1569,34 @@ onMounted(loadDashboard)
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+              <span>轮播图</span>
+              <button
+                v-for="media in product.carouselMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
+            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+              <span>详情页图</span>
+              <button
+                v-for="media in product.detailMedia"
+                :key="media.id"
+                type="button"
+                class="product-media-thumb"
+                @click="openMediaPreview(media, product.title || product.goodsId)"
+              >
+                <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
+                <span v-else class="media-placeholder">视频</span>
+                <small v-if="media.type === 'video'">播放</small>
+              </button>
+            </div>
             <div class="product-material-editor">
               <span>材质</span>
               <input
@@ -1765,15 +1913,17 @@ onMounted(loadDashboard)
       </div>
     </section>
 
-    <div v-if="previewImage" class="image-preview-overlay" role="dialog" aria-modal="true" @click.self="closeImagePreview">
+    <div v-if="previewMedia" class="image-preview-overlay" role="dialog" aria-modal="true" @click.self="closeMediaPreview">
       <div class="image-preview-dialog">
         <div class="image-preview-toolbar">
-          <strong>{{ previewImage.title }}</strong>
-          <button type="button" aria-label="关闭原图预览" @click="closeImagePreview">关闭</button>
+          <strong>{{ previewMedia.title }}</strong>
+          <button type="button" aria-label="关闭媒体预览" @click="closeMediaPreview">关闭</button>
         </div>
-        <img :src="previewImage.src" :alt="previewImage.title" />
+        <img v-if="previewMedia.type === 'image'" :src="previewMedia.src" :alt="previewMedia.title" />
+        <video v-else :src="previewMedia.src" :poster="previewMedia.poster || undefined" controls autoplay />
       </div>
     </div>
   </main>
 </template>
+
 

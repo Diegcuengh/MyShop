@@ -726,6 +726,65 @@ textarea:focus {
   font-size: 12px;
 }
 
+.product-media-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+
+.product-media-row > span {
+  flex: 0 0 auto;
+  color: #526176;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.product-media-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.product-media-thumb img,
+.media-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-placeholder {
+  display: grid;
+  place-items: center;
+  color: #526176;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-media-thumb small {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  padding: 2px 5px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .diff-card a.inline-shop-link,
 .overlap-card a.inline-shop-link {
   display: inline;
@@ -937,7 +996,8 @@ textarea:focus {
   font-weight: 800;
 }
 
-.image-preview-dialog > img {
+.image-preview-dialog > img,
+.image-preview-dialog > video {
   display: block;
   width: auto;
   height: auto;
