@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 type ProductCountTrend = {
   runId: string
@@ -214,6 +214,8 @@ const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
 const openedShopInfoKey = ref('')
 const openedShopProductKey = ref('')
+const currentProductPage = ref(1)
+const productMediaExpanded = ref<Record<string, boolean>>({})
 const previewMedia = ref<{ type: 'image' | 'video'; src: string; poster: string; title: string } | null>(null)
 const loading = ref(false)
 const diffLoading = ref(false)
@@ -225,6 +227,8 @@ const newTagDrafts = ref<Record<string, string>>({})
 const materialDrafts = ref<Record<string, string>>({})
 const error = ref('')
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
+const PRODUCT_PAGE_SIZE = 40
+const PRODUCT_MEDIA_PREVIEW_LIMIT = 10
 
 const metricLabels: Record<TrendMetric, { title: string; unit: string }> = {
   product: {
@@ -421,6 +425,44 @@ const addedProducts = computed(() => sortBySelectedMode(filterByTags(filterByMat
 const overlapProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(overlapProductsBase.value))))
 const allProducts = computed(() => sortBySelectedMode(filterByTags(filterByMaterial(allProductsBase.value))))
 
+const activeProducts = computed(() => {
+  if (productResultTab.value === 'added') {
+    return addedProducts.value
+  }
+
+  if (productResultTab.value === 'overlap') {
+    return overlapProducts.value
+  }
+
+  if (productResultTab.value === 'all') {
+    return allProducts.value
+  }
+
+  return removedProducts.value
+})
+
+const totalProductPages = computed(() => Math.max(1, Math.ceil(activeProducts.value.length / PRODUCT_PAGE_SIZE)))
+
+function pageSlice<T>(items: T[]) {
+  const start = (currentProductPage.value - 1) * PRODUCT_PAGE_SIZE
+  return items.slice(start, start + PRODUCT_PAGE_SIZE)
+}
+
+const pagedRemovedProducts = computed(() => pageSlice(removedProducts.value))
+const pagedAddedProducts = computed(() => pageSlice(addedProducts.value))
+const pagedOverlapProducts = computed(() => pageSlice(overlapProducts.value))
+const pagedAllProducts = computed(() => pageSlice(allProducts.value))
+
+watch([productResultTab, productSortMode, shopSearchQuery, selectedProductMaterial, selectedProductTags], () => {
+  currentProductPage.value = 1
+})
+
+watch(totalProductPages, (nextPageCount) => {
+  if (currentProductPage.value > nextPageCount) {
+    currentProductPage.value = nextPageCount
+  }
+})
+
 const trendChart = computed(() => {
   const width = 720
   const height = 260
@@ -514,6 +556,41 @@ function buildCompareQuery() {
   })
 
   return `?${params.toString()}`
+}
+
+function toMediaExpandKey(product: { goodsId: string; runId?: string }, kind: 'carousel' | 'detail') {
+  return `${product.runId ?? 'product'}:${product.goodsId}:${kind}`
+}
+
+function isMediaExpanded(product: { goodsId: string; runId?: string }, kind: 'carousel' | 'detail') {
+  return Boolean(productMediaExpanded.value[toMediaExpandKey(product, kind)])
+}
+
+function toggleMediaExpanded(product: { goodsId: string; runId?: string }, kind: 'carousel' | 'detail') {
+  const key = toMediaExpandKey(product, kind)
+  productMediaExpanded.value[key] = !productMediaExpanded.value[key]
+}
+
+function visibleMediaList(product: { goodsId: string; runId?: string; carouselMedia: ProductMedia[]; detailMedia: ProductMedia[] }, kind: 'carousel' | 'detail') {
+  const source = kind === 'carousel' ? product.carouselMedia : product.detailMedia
+  return isMediaExpanded(product, kind) ? source : source.slice(0, PRODUCT_MEDIA_PREVIEW_LIMIT)
+}
+
+function hasMoreMedia(product: { carouselMedia: ProductMedia[]; detailMedia: ProductMedia[] }, kind: 'carousel' | 'detail') {
+  const source = kind === 'carousel' ? product.carouselMedia : product.detailMedia
+  return source.length > PRODUCT_MEDIA_PREVIEW_LIMIT
+}
+
+function goPrevProductPage() {
+  if (currentProductPage.value > 1) {
+    currentProductPage.value -= 1
+  }
+}
+
+function goNextProductPage() {
+  if (currentProductPage.value < totalProductPages.value) {
+    currentProductPage.value += 1
+  }
 }
 
 async function loadDiffs() {
@@ -1144,7 +1221,7 @@ onUnmounted(() => {
           </div>
           <span>{{ productDiff?.removed.length ?? 0 }} 个</span>
         </div>
-        <article v-for="product in removedProducts" :key="product.goodsId" class="diff-card">
+        <article v-for="product in pagedRemovedProducts" :key="product.goodsId" class="diff-card">
           <button
             v-if="product.imageUrl"
             type="button"
@@ -1168,10 +1245,10 @@ onUnmounted(() => {
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
-            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'carousel') }">
               <span>轮播图</span>
               <button
-                v-for="media in product.carouselMedia"
+                v-for="media in visibleMediaList(product, 'carousel')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1181,11 +1258,19 @@ onUnmounted(() => {
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
               </button>
+              <button
+                v-if="hasMoreMedia(product, 'carousel')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'carousel')"
+              >
+                {{ isMediaExpanded(product, 'carousel') ? '收起' : `展开 ${product.carouselMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
+              </button>
             </div>
-            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+            <div v-if="product.detailMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'detail') }">
               <span>详情页图</span>
               <button
-                v-for="media in product.detailMedia"
+                v-for="media in visibleMediaList(product, 'detail')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1194,6 +1279,14 @@ onUnmounted(() => {
                 <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
+              </button>
+              <button
+                v-if="hasMoreMedia(product, 'detail')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'detail')"
+              >
+                {{ isMediaExpanded(product, 'detail') ? '收起' : `展开 ${product.detailMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
               </button>
             </div>
             <div class="product-material-editor">
@@ -1276,7 +1369,7 @@ onUnmounted(() => {
           </div>
           <span>{{ productDiff?.added.length ?? 0 }} 个</span>
         </div>
-        <article v-for="product in addedProducts" :key="product.goodsId" class="diff-card">
+        <article v-for="product in pagedAddedProducts" :key="product.goodsId" class="diff-card">
           <button
             v-if="product.imageUrl"
             type="button"
@@ -1300,10 +1393,10 @@ onUnmounted(() => {
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
-            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'carousel') }">
               <span>轮播图</span>
               <button
-                v-for="media in product.carouselMedia"
+                v-for="media in visibleMediaList(product, 'carousel')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1313,11 +1406,19 @@ onUnmounted(() => {
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
               </button>
+              <button
+                v-if="hasMoreMedia(product, 'carousel')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'carousel')"
+              >
+                {{ isMediaExpanded(product, 'carousel') ? '收起' : `展开 ${product.carouselMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
+              </button>
             </div>
-            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+            <div v-if="product.detailMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'detail') }">
               <span>详情页图</span>
               <button
-                v-for="media in product.detailMedia"
+                v-for="media in visibleMediaList(product, 'detail')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1326,6 +1427,14 @@ onUnmounted(() => {
                 <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
+              </button>
+              <button
+                v-if="hasMoreMedia(product, 'detail')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'detail')"
+              >
+                {{ isMediaExpanded(product, 'detail') ? '收起' : `展开 ${product.detailMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
               </button>
             </div>
             <div class="product-material-editor">
@@ -1408,7 +1517,7 @@ onUnmounted(() => {
           </div>
           <span>{{ productOverlap?.products.length ?? 0 }} 个</span>
         </div>
-        <article v-for="product in overlapProducts" :key="product.goodsId" class="overlap-card">
+        <article v-for="product in pagedOverlapProducts" :key="product.goodsId" class="overlap-card">
           <button
             v-if="product.imageUrl"
             type="button"
@@ -1437,10 +1546,10 @@ onUnmounted(() => {
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
-            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'carousel') }">
               <span>轮播图</span>
               <button
-                v-for="media in product.carouselMedia"
+                v-for="media in visibleMediaList(product, 'carousel')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1450,11 +1559,19 @@ onUnmounted(() => {
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
               </button>
+              <button
+                v-if="hasMoreMedia(product, 'carousel')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'carousel')"
+              >
+                {{ isMediaExpanded(product, 'carousel') ? '收起' : `展开 ${product.carouselMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
+              </button>
             </div>
-            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+            <div v-if="product.detailMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'detail') }">
               <span>详情页图</span>
               <button
-                v-for="media in product.detailMedia"
+                v-for="media in visibleMediaList(product, 'detail')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1463,6 +1580,14 @@ onUnmounted(() => {
                 <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
+              </button>
+              <button
+                v-if="hasMoreMedia(product, 'detail')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'detail')"
+              >
+                {{ isMediaExpanded(product, 'detail') ? '收起' : `展开 ${product.detailMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
               </button>
             </div>
             <div class="product-material-editor">
@@ -1545,7 +1670,7 @@ onUnmounted(() => {
           </div>
           <span>{{ productAll?.products.length ?? 0 }} 个</span>
         </div>
-        <article v-for="product in allProducts" :key="product.goodsId" class="diff-card">
+        <article v-for="product in pagedAllProducts" :key="product.goodsId" class="diff-card">
           <button
             v-if="product.imageUrl"
             type="button"
@@ -1569,10 +1694,10 @@ onUnmounted(() => {
             <a v-if="product.goodsUrl" :href="product.goodsUrl" target="_blank" rel="noreferrer">打开商品</a>
             <a v-if="product.detailUrl" :href="product.detailUrl" target="_blank" rel="noreferrer">本地详情</a>
             <p v-if="product.detailFile" class="local-file-path">本地文件:{{ product.detailFile }}</p>
-            <div v-if="product.carouselMedia.length > 0" class="product-media-row">
+            <div v-if="product.carouselMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'carousel') }">
               <span>轮播图</span>
               <button
-                v-for="media in product.carouselMedia"
+                v-for="media in visibleMediaList(product, 'carousel')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1582,11 +1707,19 @@ onUnmounted(() => {
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
               </button>
+              <button
+                v-if="hasMoreMedia(product, 'carousel')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'carousel')"
+              >
+                {{ isMediaExpanded(product, 'carousel') ? '收起' : `展开 ${product.carouselMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
+              </button>
             </div>
-            <div v-if="product.detailMedia.length > 0" class="product-media-row">
+            <div v-if="product.detailMedia.length > 0" class="product-media-row" :class="{ expanded: isMediaExpanded(product, 'detail') }">
               <span>详情页图</span>
               <button
-                v-for="media in product.detailMedia"
+                v-for="media in visibleMediaList(product, 'detail')"
                 :key="media.id"
                 type="button"
                 class="product-media-thumb"
@@ -1595,6 +1728,14 @@ onUnmounted(() => {
                 <img v-if="media.imageSrc" :src="media.imageSrc" :alt="media.title" loading="lazy" />
                 <span v-else class="media-placeholder">视频</span>
                 <small v-if="media.type === 'video'">播放</small>
+              </button>
+              <button
+                v-if="hasMoreMedia(product, 'detail')"
+                type="button"
+                class="product-media-toggle"
+                @click="toggleMediaExpanded(product, 'detail')"
+              >
+                {{ isMediaExpanded(product, 'detail') ? '收起' : `展开 ${product.detailMedia.length - PRODUCT_MEDIA_PREVIEW_LIMIT}` }}
               </button>
             </div>
             <div class="product-material-editor">
@@ -1668,6 +1809,12 @@ onUnmounted(() => {
           </div>
         </article>
       </section>
+
+      <div class="product-pager">
+        <button type="button" :disabled="currentProductPage <= 1" @click="goPrevProductPage">上一页</button>
+        <span>第 {{ currentProductPage }} / {{ totalProductPages }} 页</span>
+        <button type="button" :disabled="currentProductPage >= totalProductPages" @click="goNextProductPage">下一页</button>
+      </div>
     </section>
 
     <section v-if="selectedMetric === 'shop'" class="diff-grid">
