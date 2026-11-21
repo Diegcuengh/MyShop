@@ -33,7 +33,8 @@ DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
 DEFAULT_DB = "pdd_sales_trends"
 BATCH_SIZE = 500
 DB_STATUS_KEY = "DB_status"
-SCRIPT_VERSION = "2026.05.29.2"
+SCRIPT_VERSION = "v0.0.7"
+SCRIPT_BUILD_AT = datetime.fromtimestamp(Path(__file__).stat().st_mtime).strftime("%Y-%m-%d/%H:%M:%S")
 
 
 class ChineseHelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
@@ -218,9 +219,14 @@ def latest_data_modified_at(run: dict[str, Any]) -> datetime | None:
     return datetime.fromtimestamp(latest, timezone.utc)
 
 
-def is_run_imported(run: dict[str, Any]) -> bool:
+def is_run_imported(run: dict[str, Any], db: Any) -> bool:
     status = run_db_status(run)
     if not status or status.get("status") != "done":
+        return False
+
+    if db.crawl_runs.count_documents({"_id": run["run_id"]}, limit=1) == 0:
+        return False
+    if db.goods_snapshots.count_documents({"run_id": run["run_id"]}, limit=1) == 0:
         return False
 
     imported_at = parse_iso_datetime(status.get("imported_at"))
@@ -400,7 +406,13 @@ def build_documents(run: dict[str, Any], goods_dir: Path) -> tuple[list[Any], li
             "raw_detail": raw,
             "imported_at": now,
         }
-        snapshot_ops.append(ReplaceOne({"_id": snapshot_id}, snapshot_doc, upsert=True))
+        snapshot_ops.append(
+            UpdateOne(
+                {"_id": snapshot_id},
+                {"$set": {key: value for key, value in snapshot_doc.items() if key != "_id"}},
+                upsert=True,
+            )
+        )
 
         for sku in compact_skus:
             sku_id = sku.get("sku_id")
@@ -449,6 +461,44 @@ def write_ops(collection: Any, ops: list[Any], dry_run: bool) -> int:
     return len(ops)
 
 
+# Explicitly confirmed by the shop owner as one continued crawl.
+MERGED_RUN_ID = "taishan_20261116_merged"
+MERGED_SOURCE_IDS = ("泰山 石敢当_20261116_161943", "泰山 石敢当_20261116_215528")
+
+
+def refresh_confirmed_merge(db: Any) -> None:
+    runs = list(db.crawl_runs.find({"run_id": {"$in": list(MERGED_SOURCE_IDS)}}))
+    if len(runs) != len(MERGED_SOURCE_IDS):
+        return
+    runs_by_id = {run["run_id"]: run for run in runs}
+    merged_time = min(run["crawl_time"] for run in runs)
+    selected: dict[str, dict[str, Any]] = {}
+    for source_id in MERGED_SOURCE_IDS:
+        for product in db.goods_snapshots.find({"run_id": source_id}):
+            previous = selected.get(product["goods_id"])
+            if previous is None or product.get("detail_success") is True or previous.get("detail_success") is not True:
+                selected[product["goods_id"]] = product
+
+    excluded = {"_id", "tags", "tags_auto", "tags_source", "tags_updated_at", "material", "material_auto", "material_source", "material_updated_at"}
+    operations = []
+    for product in selected.values():
+        source_id = product["run_id"]
+        fields = {key: value for key, value in product.items() if key not in excluded}
+        fields.update({"run_id": MERGED_RUN_ID, "source_run_id": source_id, "crawl_time": merged_time})
+        inherited = {key: product[key] for key in excluded - {"_id"} if key in product}
+        operations.append(UpdateOne({"_id": f"{MERGED_RUN_ID}::{product['goods_id']}"}, {"$set": fields, "$setOnInsert": inherited}, upsert=True))
+    write_ops(db.goods_snapshots, operations, False)
+    db.crawl_runs.update_one(
+        {"_id": MERGED_RUN_ID},
+        {"$set": {"run_id": MERGED_RUN_ID, "keyword": runs_by_id[MERGED_SOURCE_IDS[0]]["keyword"],
+                  "crawl_time": merged_time, "folder": runs_by_id[MERGED_SOURCE_IDS[0]]["folder"],
+                  "source_run_ids": list(MERGED_SOURCE_IDS), "merged": True,
+                  "imported_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    print(f"{MERGED_RUN_ID}: merged {len(selected)} products from {len(runs)} source runs")
+
+
 def import_runs(args: argparse.Namespace) -> None:
     client = MongoClient(args.mongo_uri, serverSelectionTimeoutMS=5000)
     client.admin.command("ping")
@@ -471,7 +521,7 @@ def import_runs(args: argparse.Namespace) -> None:
     }
 
     for run in runs:
-        if is_run_imported(run):
+        if is_run_imported(run, db):
             totals["skipped_runs"] += 1
             print(f"{run['run_id']}: skipped, DB_status.status=done in _搜索结果.json")
             continue
@@ -522,6 +572,9 @@ def import_runs(args: argparse.Namespace) -> None:
             f"snapshots={len(snapshot_ops)}, sku_snapshots={len(sku_ops)}"
         )
 
+    if not args.dry_run and totals["failed_runs"] == 0:
+        refresh_confirmed_merge(db)
+
     if args.dry_run:
         print("DRY RUN: no MongoDB writes were made.")
     else:
@@ -537,6 +590,7 @@ def import_runs(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    print(f"import_pdd_to_mongo.py {SCRIPT_VERSION}/{SCRIPT_BUILD_AT}")
     parser = ChineseArgumentParser(
         description="把拼多多抓取数据导入本地 MongoDB，用于商品销量、排名和 SKU 价格趋势分析。",
         formatter_class=ChineseHelpFormatter,
@@ -553,7 +607,7 @@ def main() -> None:
         ),
     )
     parser.add_argument("--help", action="help", help="显示帮助信息并退出。")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {SCRIPT_VERSION}", help="显示脚本版本号并退出。")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {SCRIPT_VERSION}/{SCRIPT_BUILD_AT}", help="显示脚本版本号并退出。")
     parser.add_argument("--data_root", required=True, metavar="目录", help="抓取数据根目录，下面应包含每次抓取的子目录。常用值：E:\\ds电商\\data")
     parser.add_argument("--mongo_uri", required=True, metavar="连接串", help="MongoDB 连接地址。常用值：mongodb://localhost:27017/")
     parser.add_argument("--db", required=True, metavar="库名", help="要写入的 MongoDB 数据库名。常用值：pdd_sales_trends")

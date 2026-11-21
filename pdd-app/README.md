@@ -23,6 +23,21 @@ npm run dev
 
 MongoDB 默认连接：`mongodb://127.0.0.1:27017/pdd_local`
 
+## Desktop development
+
+The desktop entry reuses the web frontend and requires the Fastify API to be running.
+Start MongoDB and `npm run dev:api` in one terminal, then run `npm run dev:desktop`
+in another. The desktop command builds a debug executable and starts Vite itself.
+For a deployed API, set `VITE_API_BASE_URL` in `apps/web/.env.local` before starting
+or building the desktop application. Leave it unset to use `http://localhost:3001`.
+
+The desktop shell does not bundle a MongoDB server or the API. In debug mode,
+"商家后台" starts a separate local Chrome profile; the user signs in there.
+"准备铺货" opens a new product form and fills the title and local main image.
+It does not select a category, complete specifications or pricing, or publish.
+The local browser helper currently requires Node.js, Playwright, and Chrome on
+the development machine and is not yet bundled for distribution.
+
 ## Scripts
 
 ```bash
