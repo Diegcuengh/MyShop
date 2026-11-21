@@ -224,7 +224,7 @@ const filteredShops = computed(() => {
 })
 const selectedMetric = ref<TrendMetric>('product')
 const productResultTab = ref<ProductResultTab>('all')
-const wholesaleAnalysisOpen = ref(false)
+const wholesaleAnalysisOpen = ref(true)
 const productSortMode = ref<'rank' | 'sales' | 'comments'>('rank')
 const shopSearchQuery = ref('')
 const selectedShop = ref<{ name: string; url: string } | null>(null)
@@ -1420,6 +1420,7 @@ onUnmounted(() => {
         <h1>抓取商品对比</h1>
       </div>
       <div class="toolbar-actions">
+        <button type="button" class="secondary-button" @click="selectedMetric = 'product'; setProductResultTab('all'); wholesaleAnalysisOpen = false">商品浏览</button>
         <button v-if="isDesktop" type="button" class="secondary-button" :disabled="merchantBusy" @click="openMerchantBrowser">商家后台</button>
         <button type="button" class="secondary-button" :disabled="loading" @click="loadDashboard">{{ loading ? '加载中…' : '刷新' }}</button>
       </div>
@@ -1592,6 +1593,7 @@ onUnmounted(() => {
           </button>
           <button type="submit">搜索</button>
         </form>
+        <button v-if="!wholesaleAnalysisOpen" type="button" class="wholesale-analysis-return" @click="wholesaleAnalysisOpen = true; scrollWholesaleListTop()">返回抓取分析</button>
         <button type="button" class="wholesale-cart-button" @click="wholesaleCartOpen = true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 3h2l2.5 12h12l2.5-9H5"/><circle cx="8" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
           <span>本地购物车（{{ wholesaleCartCount }}）</span>
@@ -1871,7 +1873,7 @@ onUnmounted(() => {
           <label><input v-model.number="wholesaleMin" type="number" min="0" step="0.01" aria-label="起始价" placeholder="起始价" /> 元</label>
           <label><input v-model.number="wholesaleMax" type="number" min="0" step="0.01" aria-label="最高价" placeholder="最高价" /> 元</label>
           <span class="wholesale-result-count" aria-live="polite">{{ allProducts.length }} 个商品</span>
-          <button type="button" class="wholesale-analysis-toggle" :aria-expanded="wholesaleAnalysisOpen" @click="wholesaleAnalysisOpen = !wholesaleAnalysisOpen">抓取分析</button>
+          <button type="button" class="wholesale-analysis-toggle" :aria-expanded="wholesaleAnalysisOpen" @click="wholesaleAnalysisOpen = !wholesaleAnalysisOpen; scrollWholesaleListTop()">{{ wholesaleAnalysisOpen ? '收起抓取分析' : '返回抓取分析' }}</button>
         </div>
         <p v-if="wholesaleImageBusy" role="status">正在比对本地封面…</p>
         <p v-else-if="wholesaleImageError" role="status">{{ wholesaleImageError }}</p>
@@ -2332,6 +2334,7 @@ onUnmounted(() => {
 .wholesale-sku-pages { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; padding:10px 0; }
 .wholesale-sku-pages button { padding:3px 10px; border-radius:2px; border:1px solid #ddd; background:white; }
 .wholesale-sku-pages button[aria-current="page"] { color:#ff3030; border-color:#ff3030; }
+.wholesale-analysis-return { flex: 0 0 auto; border: 1px solid #ff3030; background: #fff; color: #d82020; padding: 10px 14px; border-radius: 4px; font-weight: 700; }
 .wholesale-options { display:grid; gap:8px; padding:20px 0 12px; }
 .wholesale-option-group { display:grid; grid-template-columns:68px auto minmax(0,1fr); align-items:start; gap:12px; }
 .wholesale-option-group > span { text-align:right; padding-top:6px; font-size:12px; color:#777; overflow-wrap:anywhere; }
