@@ -190,31 +190,6 @@ const totalSalesTrendPoints = ref<TotalSalesTrend[]>([])
 const productDiff = ref<ProductDiff | null>(null)
 const productOverlap = ref<ProductOverlap | null>(null)
 const productAll = ref<ProductList | null>(null)
-const wholesaleArchive = ref<ProductList | null>(null)
-const wholesaleArchiveId = ref('')
-const wholesaleArchiveLoading = ref(false)
-let wholesaleArchiveRequest = 0
-async function selectWholesaleArchive(runId: string) {
-  const request = ++wholesaleArchiveRequest
-  wholesaleArchiveId.value = runId
-  wholesaleArchive.value = null
-  wholesaleArchiveLoading.value = !!runId
-  currentProductPage.value = 1
-  if (!runId) return
-  try {
-    const query = new URLSearchParams({ runId })
-    const result = await apiFetch<ProductList>('/api/trends/product-list?' + query)
-    if (request === wholesaleArchiveRequest) wholesaleArchive.value = result
-  } catch (cause) {
-    if (request === wholesaleArchiveRequest) {
-      wholesaleArchiveId.value = ''
-      error.value = cause instanceof Error ? cause.message : String(cause)
-    }
-  } finally {
-    if (request === wholesaleArchiveRequest) wholesaleArchiveLoading.value = false
-  }
-}
-const wholesaleCatalogue = computed(() => wholesaleArchive.value ?? productAll.value)
 const shopDiff = ref<ShopDiff | null>(null)
 const shopView = ref<'comparison' | 'all'>('comparison')
 const allShopQuery = ref('')
@@ -233,6 +208,7 @@ const selectedProductMaterial = ref('')
 const selectedProductTags = ref<string[]>([])
 const selectedRunIds = ref<string[]>([])
 const selectionMode = ref(false)
+const focusedRunId = ref('')
 const openedShopInfoKey = ref('')
 const openedShopProductKey = ref('')
 const currentProductPage = ref(1)
@@ -251,9 +227,28 @@ const syncError = ref('')
 const syncing = ref(false)
 const newDataAvailable = ref(false)
 const isDesktop = '__TAURI_INTERNALS__' in window
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || (isDesktop ? 'http://localhost:3001' : '')).replace(/\/$/, '')
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || (isDesktop ? 'http://127.0.0.1:43121' : '')).replace(/\/$/, '')
 const merchantStatus = ref('')
 const merchantBusy = ref(false)
+const listedGoodsKey = 'myshop.listed-goods.v1'
+function readListedGoods(): Set<string> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(listedGoodsKey) ?? '[]')
+    if (Array.isArray(saved)) return new Set(saved.filter((id): id is string => typeof id === 'string'))
+  } catch { /* Invalid or unavailable storage starts with an empty list. */ }
+  return new Set()
+}
+const listedGoods = ref(readListedGoods())
+function confirmListedGoods(goodsId: string) {
+  if (!window.confirm('确认这款商品已经在拼多多商家后台发布成功？')) return
+  const updated = new Set(listedGoods.value).add(goodsId)
+  try {
+    localStorage.setItem(listedGoodsKey, JSON.stringify([...updated]))
+    listedGoods.value = updated
+  } catch {
+    error.value = '无法保存铺货状态，请检查本地存储后重试。'
+  }
+}
 type ListingProduct = Pick<DiffProduct, 'goodsId' | 'title' | 'imageUrl' | 'carouselMedia'>
 const titleCorrection = ref<{ product: ListingProduct; title: string } | null>(null)
 const imageChoice = ref<{ product: ListingProduct; urls: string[]; selected: string; message: string } | null>(null)
@@ -265,6 +260,18 @@ type DesktopBridge = {
 }
 function desktopBridge() {
   return (window as unknown as { __TAURI__?: DesktopBridge }).__TAURI__
+}
+
+async function openWholesaleOriginal(event: MouseEvent, url: string) {
+  if (!isDesktop) return
+  event.preventDefault()
+  try {
+    const bridge = desktopBridge()
+    if (!bridge) throw new Error('无法连接桌面程序')
+    await bridge.core.invoke('open_external_url', { url })
+  } catch (requestError) {
+    error.value = `打开浏览器失败：${requestError instanceof Error ? requestError.message : String(requestError)}`
+  }
 }
 const PRODUCT_PAGE_SIZE = 40
 
@@ -331,7 +338,8 @@ const selectedComparePoints = computed(() => {
 })
 
 const trendSummary = computed(() => {
-  const points = selectedComparePoints.value.length === 2 ? selectedComparePoints.value : trendPoints.value
+  const points = selectedComparePoints.value
+  if (points.length !== 2) return null
   const first = points[0]
   const last = points[points.length - 1]
 
@@ -350,14 +358,6 @@ const trendSummary = computed(() => {
 
 const currentKeyword = computed(() => {
   return trendPoints.value[trendPoints.value.length - 1]?.keyword || productDiff.value?.currentRun?.keyword || '当前关键词'
-})
-
-const activeRunDiff = computed(() => {
-  if (selectedMetric.value === 'sales') {
-    return null
-  }
-
-  return selectedMetric.value === 'shop' ? shopDiff.value : productDiff.value
 })
 
 function mallId(url: string) {
@@ -391,7 +391,11 @@ function filterByTags<T extends ProductFilterItem>(products: T[]) {
     return products
   }
 
-  return products.filter((product) => selectedProductTags.value.every((tag) => (product.tags ?? []).includes(tag)))
+  return products.filter((product) => {
+    const tags = product.tags ?? []
+    return selectedProductTags.value.every((tag) => tags.includes(tag) &&
+      !tags.some((other) => other !== tag && other.startsWith(tag) && !selectedProductTags.value.includes(other)))
+  })
 }
 
 function filterByMaterial<T extends ProductFilterItem>(products: T[]) {
@@ -406,7 +410,7 @@ const wholesaleProducts = computed<DiffProduct[]>(() => {
   if (productResultTab.value === 'removed') return productDiff.value?.removed ?? []
   if (productResultTab.value === 'added') return productDiff.value?.added ?? []
   if (productResultTab.value === 'overlap') return productOverlap.value?.products ?? []
-  return wholesaleArchiveLoading.value ? [] : wholesaleCatalogue.value?.products ?? []
+  return productAll.value?.products ?? []
 })
 
 const activeProductListBeforeFilters = computed(() => filterByShop(wholesaleProducts.value))
@@ -744,7 +748,7 @@ const trendChart = computed(() => {
 
   const points = trendPoints.value.map((point, index) => ({
     ...point,
-    selected: selectedRunIds.value.includes(point.runId),
+    selected: selectionMode.value ? selectedRunIds.value.includes(point.runId) : focusedRunId.value === point.runId,
     labelAnchor: index === 0 ? 'start' : index === trendPoints.value.length - 1 ? 'end' : 'middle',
     valueLabelY: scaleY(point.value) > bottomY - 14 ? scaleY(point.value) - 12 : scaleY(point.value) - 12,
     x: scaleX(index),
@@ -845,13 +849,16 @@ function goNextProductPage() {
   }
 }
 
+let diffRequestVersion = 0
 async function loadDiffs(preserveEdits = false) {
+  const requestVersion = ++diffRequestVersion
   diffLoading.value = true
 
   try {
     const query = buildCompareQuery()
     tagAutoLoading.value = true
     await apiSend<{ matched: number; modified: number }>(`/api/trends/product-tags/auto${query}`, 'POST')
+    if (requestVersion !== diffRequestVersion) return
     tagAutoLoading.value = false
     const [diff, overlap, all, shopDiffData] = await Promise.all([
       apiFetch<ProductDiff>(`/api/trends/product-diff${query}`),
@@ -859,6 +866,7 @@ async function loadDiffs(preserveEdits = false) {
       apiFetch<ProductList>(`/api/trends/product-list${query}`),
       apiFetch<ShopDiff>(`/api/trends/shop-diff${query}`)
     ])
+    if (requestVersion !== diffRequestVersion) return
     productDiff.value = diff
     productOverlap.value = overlap
     productAll.value = all
@@ -871,8 +879,10 @@ async function loadDiffs(preserveEdits = false) {
       materialDrafts.value = {}
     }
   } finally {
-    tagAutoLoading.value = false
-    diffLoading.value = false
+    if (requestVersion === diffRequestVersion) {
+      tagAutoLoading.value = false
+      diffLoading.value = false
+    }
   }
 }
 
@@ -890,6 +900,9 @@ async function readDashboard(preserveEdits = false) {
 
     if (productTrend.length >= 2 && !selectionMode.value) {
       selectedRunIds.value = productTrend.slice(-2).map((point) => point.runId)
+      focusedRunId.value = productTrend[productTrend.length - 1].runId
+    } else if (productTrend.length === 1 && !selectionMode.value) {
+      focusedRunId.value = productTrend[0].runId
     }
 
     await loadDiffs(preserveEdits)
@@ -945,10 +958,39 @@ async function loadDashboard() {
 
 async function toggleRunSelection(runId: string) {
   if (!selectionMode.value) {
+    const index = productTrendPoints.value.findIndex((point) => point.runId === runId)
+    if (index < 0) return
+    focusedRunId.value = runId
+    if (index === 0) {
+      const requestVersion = ++diffRequestVersion
+      tagAutoLoading.value = false
+      diffLoading.value = false
+      selectedRunIds.value = [runId]
+      productDiff.value = null
+      productOverlap.value = null
+      shopDiff.value = null
+      productAll.value = null
+      try {
+        const result = await apiFetch<ProductList>(`/api/trends/product-list?${new URLSearchParams({ runId })}`)
+        if (requestVersion === diffRequestVersion) productAll.value = result
+      } catch (requestError) {
+        error.value = requestError instanceof Error ? requestError.message : '加载商品数据失败'
+      }
+      return
+    }
+    selectedRunIds.value = [productTrendPoints.value[index - 1].runId, runId]
+    try {
+      await loadDiffs()
+    } catch (requestError) {
+      error.value = requestError instanceof Error ? requestError.message : '加载对比数据失败'
+    }
     return
   }
 
   if (selectedRunIds.value.includes(runId)) {
+    ++diffRequestVersion
+    tagAutoLoading.value = false
+    diffLoading.value = false
     selectedRunIds.value = selectedRunIds.value.filter((id) => id !== runId)
     return
   }
@@ -965,19 +1007,19 @@ async function toggleRunSelection(runId: string) {
 }
 
 function toggleSelectionMode() {
+  const selectedLast = [...selectedRunIds.value].sort((a, b) => productTrendPoints.value.findIndex((point) => point.runId === a) - productTrendPoints.value.findIndex((point) => point.runId === b)).at(-1)
   selectionMode.value = !selectionMode.value
 
   if (selectionMode.value) {
+    ++diffRequestVersion
+    tagAutoLoading.value = false
+    diffLoading.value = false
     selectedRunIds.value = []
     return
   }
 
-  if (selectedRunIds.value.length !== 2 && productTrendPoints.value.length >= 2) {
-    selectedRunIds.value = productTrendPoints.value.slice(-2).map((point) => point.runId)
-    void loadDiffs().catch((requestError: unknown) => {
-      error.value = requestError instanceof Error ? requestError.message : '加载对比数据失败'
-    })
-  }
+  const current = selectedLast || focusedRunId.value || productTrendPoints.value.at(-1)?.runId
+  if (current) void toggleRunSelection(current)
 }
 
 function formatDate(value: string) {
@@ -1203,7 +1245,6 @@ function updateLocalProductTags(runId: string, goodsId: string, tags: string[], 
   updateList(productDiff.value?.removed ?? [])
   updateList(productDiff.value?.added ?? [])
   updateList(productAll.value?.products ?? [])
-  updateList(wholesaleArchive.value?.products ?? [])
 
   for (const product of productOverlap.value?.products ?? []) {
     if (product.runId === runId && product.goodsId === goodsId) {
@@ -1226,7 +1267,6 @@ function updateLocalProductMaterial(runId: string, goodsId: string, material: st
   updateList(productDiff.value?.removed ?? [])
   updateList(productDiff.value?.added ?? [])
   updateList(productAll.value?.products ?? [])
-  updateList(wholesaleArchive.value?.products ?? [])
 
   for (const product of productOverlap.value?.products ?? []) {
     if (product.runId === runId && product.goodsId === goodsId) {
@@ -1236,8 +1276,56 @@ function updateLocalProductMaterial(runId: string, goodsId: string, material: st
   }
 }
 
-async function saveProductTags(product: DiffProduct | ProductOverlapItem) {
-  if (!hasTagChanges(product)) {
+const cardTagKey = ref('')
+const cardTagText = ref('')
+const cardTagError = ref('')
+const cardTagHistoryOpen = ref(false)
+const cardTagHistoryKey = 'myshop.card-tag-history'
+const cardTagHistory = ref<string[]>([])
+try {
+  const stored: unknown = JSON.parse(localStorage.getItem(cardTagHistoryKey) ?? '[]')
+  if (Array.isArray(stored)) {
+    cardTagHistory.value = [...new Set(stored.filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim())))]
+  }
+} catch {
+  // The editor still works when storage is unavailable.
+}
+
+function openCardTag(product: DiffProduct) {
+  cardTagKey.value = getProductKey(product)
+  cardTagText.value = cardTagHistory.value[0] ?? ''
+  cardTagError.value = ''
+  cardTagHistoryOpen.value = false
+}
+
+function pickCardTag(tag: string) {
+  cardTagText.value = tag
+  cardTagError.value = ''
+  cardTagHistoryOpen.value = false
+}
+
+async function addCardTag(product: DiffProduct) {
+  const tag = cardTagText.value.trim()
+  if (!tag || tagSavingKey.value) return
+  const tags = product.tags ?? []
+  if (tags.includes(tag)) {
+    cardTagError.value = '该标签已存在'
+    return
+  }
+  const saved = await saveProductTags(product, [...tags, tag])
+  if (saved) {
+    cardTagHistory.value = [tag, ...cardTagHistory.value.filter(item => item !== tag)]
+    try {
+      localStorage.setItem(cardTagHistoryKey, JSON.stringify(cardTagHistory.value))
+    } catch {
+      // Keep the history available for this session.
+    }
+    cardTagKey.value = ''
+  }
+}
+
+async function saveProductTags(product: DiffProduct | ProductOverlapItem, tags?: string[]) {
+  if (!tags && !hasTagChanges(product)) {
     return
   }
 
@@ -1249,14 +1337,20 @@ async function saveProductTags(product: DiffProduct | ProductOverlapItem) {
       `/api/trends/products/${encodeURIComponent(product.runId)}/${encodeURIComponent(product.goodsId)}/tags`,
       'PATCH',
       {
-        tags: normalizeEditableTags(getEditableTags(product))
+        tags: normalizeEditableTags(tags ?? getEditableTags(product))
       }
     )
     updateLocalProductTags(updated.runId, updated.goodsId, updated.tags, updated.tagsSource)
-    const { [key]: _removedTagDraft, ...remainingTagDrafts } = tagDrafts.value
-    tagDrafts.value = remainingTagDrafts
+    if (!tags) {
+      const { [key]: _removedTagDraft, ...remainingTagDrafts } = tagDrafts.value
+      tagDrafts.value = remainingTagDrafts
+    }
+    return true
   } catch (requestError) {
-    error.value = requestError instanceof Error ? requestError.message : '保存标签失败'
+    const message = requestError instanceof Error ? requestError.message : '保存标签失败'
+    if (tags) cardTagError.value = message
+    else error.value = message
+    return false
   } finally {
     tagSavingKey.value = ''
   }
@@ -1501,6 +1595,7 @@ onUnmounted(() => {
         <span v-if="trendSummary">
           {{ formatChange(trendSummary.change) }} {{ metricLabels[selectedMetric].unit }}, {{ trendSummary.percent.toFixed(2) }}%
         </span>
+        <span v-else-if="!selectionMode && focusedRunId">首次抓取，没有上次数据</span>
         <span v-if="selectionMode" class="selection-hint">
           已选择 {{ selectedRunIds.length }}/2 个日期        </span>
       </div>
@@ -1524,7 +1619,7 @@ onUnmounted(() => {
           <g
             v-for="point in trendChart.points"
             :key="point.runId"
-            :class="['chart-point-group', { selectable: selectionMode }]"
+            class="chart-point-group selectable"
             @click="toggleRunSelection(point.runId)"
           >
             <line :x1="point.x" :y1="trendChart.zeroY" :x2="point.x" :y2="point.y" class="chart-guide" />
@@ -1536,7 +1631,6 @@ onUnmounted(() => {
               @click.stop="toggleRunSelection(point.runId)"
             />
             <circle
-              v-if="selectionMode"
               :cx="point.x"
               :cy="point.y"
               r="22"
@@ -1566,16 +1660,6 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <section v-if="activeRunDiff?.previousRun && activeRunDiff.currentRun" v-show="!wholesaleProduct && (selectedMetric !== 'product' || productResultTab !== 'all' || wholesaleAnalysisOpen)" class="compare-header panel">
-      <div>
-        <span>对比起点</span>
-        <strong>{{ formatDate(activeRunDiff.previousRun.crawlTime) }}</strong>
-      </div>
-      <div>
-        <span>对比终点</span>
-        <strong>{{ formatDate(activeRunDiff.currentRun.crawlTime) }}</strong>
-      </div>
-    </section>
 
     <p v-if="diffLoading" class="muted">
       {{ tagAutoLoading ? '正在自动打标签并写回 MongoDB...' : '正在更新对比结果...' }}
@@ -1611,7 +1695,7 @@ onUnmounted(() => {
           <span>{{ productOverlap?.products.length ?? 0 }}</span>
         </button>
         <button type="button" :class="{ active: productResultTab === 'all' }" @click="setProductResultTab('all')">
-          所有商品          <span>{{ wholesaleCatalogue?.products.length ?? 0 }}</span>
+          所有商品          <span>{{ productAll?.products.length ?? 0 }}</span>
         </button>
       </div>
 
@@ -1677,7 +1761,7 @@ onUnmounted(() => {
         </aside>
         <nav>
           <button type="button" @click="closeWholesale">{{ productResultTab === 'all' ? '返回所有商品' : '返回商品列表' }}</button>
-          <a v-if="wholesaleProduct.goodsUrl" :href="wholesaleProduct.goodsUrl" target="_blank" rel="noreferrer">查看批发原页</a>
+          <a v-if="wholesaleProduct.goodsUrl" :href="wholesaleProduct.goodsUrl" target="_blank" rel="noreferrer" @click="openWholesaleOriginal($event, wholesaleProduct.goodsUrl)">查看批发原页</a>
           <button type="button" @click="wholesaleCartOpen = true">本地购物车（{{ wholesaleCartCount }}）</button>
         </nav>
         <div class="wholesale-detail-columns">
@@ -1791,13 +1875,21 @@ onUnmounted(() => {
             <div v-if="wholesaleSkuPageCount > 1" class="wholesale-sku-pages" aria-label="规格分页">
               <button v-for="page in wholesaleSkuPageCount" :key="page" type="button" :aria-current="page === wholesaleSkuPage ? 'page' : undefined" @click="wholesaleSkuPage = page">{{ page }}</button>
             </div>
-            <div class="wholesale-selection">
+            <div class="wholesale-actions">
+              <button v-if="isDesktop || listedGoods.has(wholesaleProduct.goodsId)" type="button" class="wholesale-list-now"
+                :disabled="merchantBusy || listedGoods.has(wholesaleProduct.goodsId)" @click="prepareMerchantProduct(wholesaleProduct)">
+                {{ listedGoods.has(wholesaleProduct.goodsId) ? '已经铺货' : '立即铺货' }}
+              </button>
+              <a v-if="wholesaleProduct.goodsUrl" class="wholesale-buy-now" :href="wholesaleProduct.goodsUrl" target="_blank"
+                rel="noreferrer" @click="openWholesaleOriginal($event, wholesaleProduct.goodsUrl)">立即购买</a>
+              <button v-if="isDesktop && !listedGoods.has(wholesaleProduct.goodsId)" type="button" class="wholesale-confirm-listed"
+                :disabled="merchantBusy" @click="confirmListedGoods(wholesaleProduct.goodsId)">确认已发布</button>
+            </div>
+            <div v-if="wholesaleSelection.count" class="wholesale-selection">
               <span>已选规格：{{ wholesaleSelection.count }} 件</span>
               <strong v-if="wholesaleSelection.count">参考合计 ¥{{ (wholesaleSelection.cents / 100).toFixed(2) }}</strong>
-              <a v-if="wholesaleProduct.goodsUrl" :href="wholesaleProduct.goodsUrl" target="_blank" rel="noreferrer">到批发原页采购</a>
               <button type="button" :disabled="!wholesaleSelection.count" @click="addWholesaleSelection">加入本地购物车</button>
             </div>
-            <button v-if="isDesktop" type="button" :disabled="merchantBusy" @click="prepareMerchantProduct(wholesaleProduct)">准备铺货</button>
           </div>
         </div>
         <div class="wholesale-intro">
@@ -1853,13 +1945,6 @@ onUnmounted(() => {
           <button type="button" @click="wholesaleCartOpen = true">本地购物车</button>
           <button type="button" @click="scrollWholesaleListTop">回到顶部</button>
         </aside>
-        <label v-if="productResultTab === 'all' && (wholesaleAnalysisOpen || wholesaleArchiveId)" class="wholesale-archive-control">
-          <span>商品批次</span>
-          <select :value="wholesaleArchiveId" @change="selectWholesaleArchive(($event.target as HTMLSelectElement).value)">
-            <option value="">当前对比终点</option>
-            <option v-for="run in productTrendPoints" :key="run.runId" :value="run.runId">{{ run.runId }}</option>
-          </select>
-        </label>
         <div v-if="wholesaleShapes.length" class="wholesale-shapes" aria-label="外观造型">
           <button type="button" :aria-pressed="!wholesaleShape" @click="wholesaleShape = ''">外观造型</button>
           <button v-for="shape in wholesaleShapes" :key="shape" type="button" :aria-pressed="wholesaleShape === shape" @click="wholesaleShape = wholesaleShape === shape ? '' : shape">{{ shape }}</button>
@@ -1878,10 +1963,10 @@ onUnmounted(() => {
         <p v-if="wholesaleImageBusy" role="status">正在比对本地封面…</p>
         <p v-else-if="wholesaleImageError" role="status">{{ wholesaleImageError }}</p>
         <p v-else-if="wholesaleImageMatches" role="status">相似封面：{{ allProducts.length }} 个 <button type="button" @click="clearWholesaleImageSearch">清除</button></p>
-        <p v-if="wholesaleArchiveLoading" role="status">正在读取本地商品批次…</p>
         <p v-else-if="!pagedAllProducts.length">没有符合条件的商品</p>
         <div class="wholesale-grid">
-          <button v-for="product in pagedAllProducts" :key="product.goodsId" type="button" class="wholesale-card" :data-goods-id="product.goodsId" @click="openWholesale(product)">
+          <article v-for="product in pagedAllProducts" :key="product.goodsId" class="wholesale-card-item">
+          <button type="button" class="wholesale-card" :data-goods-id="product.goodsId" @click="openWholesale(product)">
             <span class="wholesale-card-image">
               <img v-if="product.listingImageUrl || product.imageUrl" :src="product.listingImageUrl || product.imageUrl" alt="" loading="lazy"
                 @error="(event) => { const img = event.currentTarget as HTMLImageElement; if (product.imageUrl && img.getAttribute('src') !== product.imageUrl) img.src = product.imageUrl }" />
@@ -1901,6 +1986,25 @@ onUnmounted(() => {
               <span>{{ product.shopName || '未记录店铺' }}</span><small v-if="product.address">{{ product.address }}</small>
             </span>
           </button>
+          <div class="wholesale-card-tools">
+            <form v-if="cardTagKey === getProductKey(product)" @submit.prevent="addCardTag(product)">
+              <div class="card-tag-combobox" @focusout="(event) => { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) cardTagHistoryOpen = false }" @keydown.esc="cardTagHistoryOpen = false">
+                <input v-model="cardTagText" aria-label="标签名称" placeholder="标签名称" @input="cardTagError = ''" />
+                <button v-if="cardTagHistory.length" type="button" class="card-tag-arrow" aria-label="选择历史标签" :aria-expanded="cardTagHistoryOpen" :disabled="!!tagSavingKey" @click="cardTagHistoryOpen = !cardTagHistoryOpen">▾</button>
+                <div v-if="cardTagHistoryOpen" class="card-tag-options">
+                  <button v-for="tag in cardTagHistory" :key="tag" type="button" @click="pickCardTag(tag)">{{ tag }}</button>
+                </div>
+              </div>
+              <button type="submit" :disabled="!!tagSavingKey || !cardTagText.trim()">保存</button>
+              <button type="button" :disabled="!!tagSavingKey" @click="cardTagKey = ''">取消</button>
+              <small v-if="cardTagError" role="alert">{{ cardTagError }}</small>
+            </form>
+            <template v-else>
+              <button type="button" :disabled="!!tagSavingKey" @click="openCardTag(product)">添加标签</button>
+              <span class="wholesale-card-tags">{{ product.tags?.join('、') }}</span>
+            </template>
+          </div>
+          </article>
         </div>
       </section>
 
@@ -2248,8 +2352,6 @@ onUnmounted(() => {
 .wholesale-sort label { display:inline-flex; flex-direction:row; align-items:center; gap:6px; margin:5px 10px; white-space:nowrap; }
 .wholesale-sort input { width:78px; padding:4px 8px; border-radius:2px; }
 .wholesale-result-count { margin-inline:auto 12px; color:#666; padding:6px 0; white-space:nowrap; }
-.wholesale-archive-control { display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; }
-.wholesale-archive-control select { max-width:100%; }
 .wholesale-sort .wholesale-analysis-toggle { border-right:0; border-left:1px solid #e8e8e8; }
 .wholesale-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:24px; padding:27px 0 24px; background:#f2f2f2; }
 .wholesale-card { display:block; width:100%; padding:0; border:0; border-radius:0; color:#222; background:white; text-align:left; cursor:pointer; overflow:hidden; }
@@ -2269,6 +2371,19 @@ onUnmounted(() => {
 .wholesale-card-shop > svg { flex:none; color:#999; }
 .wholesale-card-shop > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .wholesale-card-shop small { flex:none; font-size:inherit; }
+.wholesale-card-item { min-width:0; background:#fff; }
+.wholesale-card-tools { display:flex; align-items:center; gap:8px; min-height:42px; padding:6px 12px; border-top:1px solid #ebebeb; }
+.wholesale-card-tools form { display:flex; flex-wrap:wrap; align-items:center; gap:6px; width:100%; }
+.wholesale-card-tools input { flex:1 1 80px; min-width:0; padding:4px 6px; }
+.card-tag-combobox { position:relative; display:flex; flex:1 1 110px; min-width:0; }
+.card-tag-combobox input { width:100%; padding-right:30px; }
+.wholesale-card-tools .card-tag-arrow { position:absolute; right:1px; top:1px; bottom:1px; border:0; padding:0 8px; background:transparent; }
+.card-tag-options { position:absolute; z-index:20; top:100%; left:0; right:0; max-height:180px; overflow:auto; background:#fff; border:1px solid #cfd8e5; box-shadow:0 4px 12px #0002; }
+.wholesale-card-tools .card-tag-options button { display:block; width:100%; border:0; text-align:left; border-radius:0; overflow-wrap:anywhere; }
+.wholesale-card-tools .card-tag-options button:hover, .wholesale-card-tools .card-tag-options button:focus { background:#eef4ff; }
+.wholesale-card-tools button { flex:none; border:1px solid #cfd8e5; border-radius:4px; padding:4px 8px; background:#fff; color:#253246; }
+.wholesale-card-tools [role="alert"] { flex-basis:100%; color:#b91c1c; }
+.wholesale-card-tags { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#637083; font-size:12px; }
 .wholesale-badges { display:flex; align-items:center; gap:8px; min-height:20px; padding:0 14px; margin:0 0 9px; overflow:hidden; }
 .wholesale-badges small { flex:none; border:1px solid #ffd2c5; color:#d34827; padding:0 4px; line-height:18px; }
 .wholesale-services { flex-basis:100%; flex-wrap:wrap; padding:12px 0 0; margin:0; border-top:1px solid #e8e8e8; }
@@ -2278,7 +2393,7 @@ onUnmounted(() => {
 .wholesale-side-tools button + button { border-top:1px solid #eee; }
 .wholesale-side-tools button:first-child, .wholesale-side-tools button:hover { color:#ff3030; }
 @media (max-width:1350px) { .wholesale-side-tools { display:none; } }
-.wholesale-detail nav { display:flex; flex-wrap:wrap; align-items:center; gap:8px 22px; min-height:36px; padding:5px 12px; background:#f3f3f3; border-bottom:1px solid #eee; font-size:13px; }
+.wholesale-detail nav { position:sticky; top:0; z-index:4; display:flex; flex-wrap:nowrap; align-items:center; gap:8px 22px; height:46px; box-sizing:border-box; padding:5px 12px; background:#f3f3f3; border-bottom:1px solid #eee; font-size:13px; overflow-x:auto; white-space:nowrap; }
 .wholesale-detail nav button, .wholesale-detail nav a { padding:3px 0; border:0; border-radius:0; background:transparent; color:#666; text-decoration:none; font:inherit; }
 .wholesale-detail nav button { cursor:pointer; }
 .wholesale-detail nav button:last-child { margin-left:auto; }
@@ -2354,9 +2469,15 @@ onUnmounted(() => {
 .wholesale-quantity input::-webkit-inner-spin-button { appearance:none; }
 .wholesale-selection { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:12px; padding:12px 0; }
 .wholesale-selection strong { color:#d33; }
-.wholesale-selection a { padding:8px 14px; background:#ff3030; color:white; text-decoration:none; }
+.wholesale-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px 16px; margin-top:0; padding:24px clamp(0px, 7vw, 88px) 22px; border-top:1px solid #e8e8e8; }
+.wholesale-actions .wholesale-list-now, .wholesale-actions .wholesale-buy-now { display:inline-grid; place-items:center; box-sizing:border-box; min-width:128px; height:40px; padding:0 12px; border-radius:4px; border:1px solid #ff3030; font-size:16px; text-decoration:none; }
+.wholesale-actions .wholesale-list-now { background:#ff3030; color:white; }
+.wholesale-actions .wholesale-list-now:disabled { background:#eee; color:#666; border-color:#ddd; opacity:1; }
+.wholesale-actions .wholesale-buy-now { color:#ff3030; background:white; }
+.wholesale-actions .wholesale-confirm-listed { background:none; border:0; color:#555; }
+@media (max-width:600px) { .wholesale-actions { padding-inline:0; } }
 @media (max-width:420px) { .wholesale-quantity { grid-column:2 / -1; justify-self:end; } }
-.wholesale-intro { position:sticky; top:0; z-index:2; display:flex; flex-wrap:wrap; background:#f5f5f5; border-bottom:1px solid #fb3434; margin-top:24px; }
+.wholesale-intro { position:sticky; top:46px; z-index:2; display:flex; flex-wrap:wrap; background:#f5f5f5; border-bottom:1px solid #fb3434; margin-top:24px; }
 .wholesale-intro button { min-height:47px; border:0; border-radius:0; background:transparent; padding:10px 24px; font-size:14px; }
 .wholesale-intro button[aria-pressed="true"] { background:#fb3434; color:white; }
 .wholesale-discussion { padding:8px 20px; }

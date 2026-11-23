@@ -1,0 +1,212 @@
+
+> pdd-app@0.1.0 dev
+> concurrently -n api,web -c blue,green "npm run dev:api" "npm run dev:web"
+
+[api] 
+[api] > pdd-app@0.1.0 dev:api
+[api] > npm run dev -w apps/api
+[api] 
+[web] 
+[web] > pdd-app@0.1.0 dev:web
+[web] > npm run dev -w apps/web
+[web] 
+[api] 
+[api] > @pdd/api@0.1.0 dev
+[api] > tsx watch src/server.ts
+[api] 
+[web] 
+[web] > @pdd/web@0.0.0 dev
+[web] > vite
+[web] 
+[api] ◇ injected env (3) from ..\..\.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+[api] {"level":30,"time":1779853014290,"pid":8688,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://127.0.0.1:3001"}
+[api] {"level":30,"time":1779853014290,"pid":8688,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.174.1:3001"}
+[api] {"level":30,"time":1779853014290,"pid":8688,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.211.1:3001"}
+[api] {"level":30,"time":1779853014290,"pid":8688,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.0.102:3001"}
+[api] {"level":30,"time":1779853014290,"pid":8688,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://172.18.176.1:3001"}
+[web] [2m11:36:57[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because lockfile has changed
+[web] 
+[web]   [32m[1mVITE[22m v8.0.14[39m  [2mready in [0m[1m3645[22m[2m[0m ms[22m
+[web] 
+[web]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[web] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[api] {"level":30,"time":1779853052060,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":9876},"msg":"incoming request"}
+[api] {"level":30,"time":1779853052065,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","res":{"statusCode":200},"responseTime":4.331000000005588,"msg":"request completed"}
+[api] {"level":30,"time":1779853179432,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10171},"msg":"incoming request"}
+[api] {"level":30,"time":1779853179443,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10172},"msg":"incoming request"}
+[api] {"level":30,"time":1779853179934,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","res":{"statusCode":200},"responseTime":501.78169999993406,"msg":"request completed"}
+[api] {"level":30,"time":1779853179939,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","res":{"statusCode":200},"responseTime":495.53320000017993,"msg":"request completed"}
+[web] [2m11:40:48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779853248900,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10286},"msg":"incoming request"}
+[api] {"level":30,"time":1779853248901,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10287},"msg":"incoming request"}
+[api] {"level":30,"time":1779853248902,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","res":{"statusCode":200},"responseTime":2.1648000001441687,"msg":"request completed"}
+[api] {"level":30,"time":1779853248909,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","res":{"statusCode":200},"responseTime":7.770199999911711,"msg":"request completed"}
+[api] {"level":30,"time":1779853324019,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10469},"msg":"incoming request"}
+[api] {"level":30,"time":1779853324020,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10470},"msg":"incoming request"}
+[api] {"level":30,"time":1779853324021,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","res":{"statusCode":200},"responseTime":1.9068999998271465,"msg":"request completed"}
+[api] {"level":30,"time":1779853324029,"pid":8688,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","res":{"statusCode":200},"responseTime":9.557999999960884,"msg":"request completed"}
+[api] 11:43:02 [tsx] change in ./src\trends.ts Restarting...
+[api] c◇ injected env (3) from ..\..\.env // tip: ⌘ enable debugging { debug: true }
+[api] {"level":30,"time":1779853383150,"pid":30624,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://127.0.0.1:3001"}
+[api] {"level":30,"time":1779853383150,"pid":30624,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.174.1:3001"}
+[api] {"level":30,"time":1779853383150,"pid":30624,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.211.1:3001"}
+[api] {"level":30,"time":1779853383150,"pid":30624,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.0.102:3001"}
+[api] {"level":30,"time":1779853383150,"pid":30624,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://172.18.176.1:3001"}
+[web] [2m11:44:18[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779853458397,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10712},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458409,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10713},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458412,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10716},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458415,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10718},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458416,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10719},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458416,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10720},"msg":"incoming request"}
+[api] {"level":30,"time":1779853458432,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","res":{"statusCode":200},"responseTime":16.447000000160187,"msg":"request completed"}
+[api] {"level":30,"time":1779853458435,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","res":{"statusCode":200},"responseTime":26.072699999902397,"msg":"request completed"}
+[api] {"level":30,"time":1779853458437,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","res":{"statusCode":200},"responseTime":40.4375,"msg":"request completed"}
+[api] {"level":30,"time":1779853458438,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","res":{"statusCode":200},"responseTime":22.63870000001043,"msg":"request completed"}
+[api] {"level":30,"time":1779853458456,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","res":{"statusCode":200},"responseTime":44.64629999990575,"msg":"request completed"}
+[api] {"level":30,"time":1779853458461,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","res":{"statusCode":200},"responseTime":45.05279999994673,"msg":"request completed"}
+[web] [2m11:44:32[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
+[api] {"level":30,"time":1779853487905,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10798},"msg":"incoming request"}
+[api] {"level":30,"time":1779853487909,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","res":{"statusCode":200},"responseTime":3.8197999999392778,"msg":"request completed"}
+[api] {"level":30,"time":1779853496618,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-8","req":{"method":"GET","url":"/","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10837},"msg":"incoming request"}
+[api] {"level":30,"time":1779853496619,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-8","msg":"Route GET:/ not found"}
+[api] {"level":30,"time":1779853496619,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-8","res":{"statusCode":404},"responseTime":0.3474000000860542,"msg":"request completed"}
+[api] {"level":30,"time":1779853510787,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-9","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10879},"msg":"incoming request"}
+[api] {"level":30,"time":1779853510788,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-a","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10880},"msg":"incoming request"}
+[api] {"level":30,"time":1779853510788,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-b","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":10881},"msg":"incoming request"}
+[api] {"level":30,"time":1779853510789,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-9","res":{"statusCode":200},"responseTime":2.5398000001441687,"msg":"request completed"}
+[api] {"level":30,"time":1779853510790,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-a","res":{"statusCode":200},"responseTime":2.8554000000003725,"msg":"request completed"}
+[api] {"level":30,"time":1779853510801,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-b","res":{"statusCode":200},"responseTime":12.836200000019744,"msg":"request completed"}
+[api] {"level":30,"time":1779853559517,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-c","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11007},"msg":"incoming request"}
+[api] {"level":30,"time":1779853559517,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-d","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11009},"msg":"incoming request"}
+[api] {"level":30,"time":1779853559518,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-e","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11010},"msg":"incoming request"}
+[api] {"level":30,"time":1779853559520,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-c","res":{"statusCode":200},"responseTime":3.0736000000033528,"msg":"request completed"}
+[api] {"level":30,"time":1779853559520,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-d","res":{"statusCode":200},"responseTime":2.80890000006184,"msg":"request completed"}
+[api] {"level":30,"time":1779853559526,"pid":30624,"hostname":"DESKTOP-6PHL6BM","reqId":"req-e","res":{"statusCode":200},"responseTime":8.493100000079721,"msg":"request completed"}
+[api] 11:47:37 [tsx] change in ./src\trends.ts Restarting...
+[api] c◇ injected env (3) from ..\..\.env // tip: ⌘ suppress logs { quiet: true }
+[api] {"level":30,"time":1779853657709,"pid":29948,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://127.0.0.1:3001"}
+[api] {"level":30,"time":1779853657710,"pid":29948,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.174.1:3001"}
+[api] {"level":30,"time":1779853657710,"pid":29948,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.211.1:3001"}
+[api] {"level":30,"time":1779853657710,"pid":29948,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.0.102:3001"}
+[api] {"level":30,"time":1779853657710,"pid":29948,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://172.18.176.1:3001"}
+[web] [2m11:48:00[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779853680409,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11194},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680419,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11195},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680420,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11196},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680421,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11197},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680421,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11204},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680421,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11206},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680421,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11207},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680422,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-8","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11208},"msg":"incoming request"}
+[api] {"level":30,"time":1779853680432,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","res":{"statusCode":200},"responseTime":10.67160000000149,"msg":"request completed"}
+[api] {"level":30,"time":1779853680434,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","res":{"statusCode":200},"responseTime":15.53469999996014,"msg":"request completed"}
+[api] {"level":30,"time":1779853680436,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","res":{"statusCode":200},"responseTime":26.674600000027567,"msg":"request completed"}
+[api] {"level":30,"time":1779853680441,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","res":{"statusCode":200},"responseTime":19.754499999806285,"msg":"request completed"}
+[api] {"level":30,"time":1779853680452,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-7","res":{"statusCode":200},"responseTime":30.719899999909103,"msg":"request completed"}
+[api] {"level":30,"time":1779853680458,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","res":{"statusCode":200},"responseTime":37.61369999987073,"msg":"request completed"}
+[api] {"level":30,"time":1779853680461,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","res":{"statusCode":200},"responseTime":40.71940000005998,"msg":"request completed"}
+[api] {"level":30,"time":1779853680464,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-8","res":{"statusCode":200},"responseTime":42.057600000174716,"msg":"request completed"}
+[web] [2m11:48:35[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[web] [2m11:48:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
+[api] {"level":30,"time":1779853753936,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-9","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11513},"msg":"incoming request"}
+[api] {"level":30,"time":1779853753948,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-9","res":{"statusCode":200},"responseTime":11.448300000047311,"msg":"request completed"}
+[api] {"level":30,"time":1779853772171,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-a","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11560},"msg":"incoming request"}
+[api] {"level":30,"time":1779853772172,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-b","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11561},"msg":"incoming request"}
+[api] {"level":30,"time":1779853772172,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-c","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11562},"msg":"incoming request"}
+[api] {"level":30,"time":1779853772173,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-d","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":11563},"msg":"incoming request"}
+[api] {"level":30,"time":1779853772174,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-a","res":{"statusCode":200},"responseTime":3.0420999999623746,"msg":"request completed"}
+[api] {"level":30,"time":1779853772176,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-b","res":{"statusCode":200},"responseTime":4.172400000039488,"msg":"request completed"}
+[api] {"level":30,"time":1779853772189,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-c","res":{"statusCode":200},"responseTime":16.501900000032037,"msg":"request completed"}
+[api] {"level":30,"time":1779853772193,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-d","res":{"statusCode":200},"responseTime":19.832500000018626,"msg":"request completed"}
+[api] {"level":30,"time":1779855383392,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-e","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":14514},"msg":"incoming request"}
+[api] {"level":30,"time":1779855383392,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-f","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":14515},"msg":"incoming request"}
+[api] {"level":30,"time":1779855383393,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-g","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":14516},"msg":"incoming request"}
+[api] {"level":30,"time":1779855383393,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-h","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":14517},"msg":"incoming request"}
+[api] {"level":30,"time":1779855383395,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-e","res":{"statusCode":200},"responseTime":2.8847000002861023,"msg":"request completed"}
+[api] {"level":30,"time":1779855383396,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-f","res":{"statusCode":200},"responseTime":3.456199999898672,"msg":"request completed"}
+[api] {"level":30,"time":1779855383402,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-g","res":{"statusCode":200},"responseTime":9.094699999783188,"msg":"request completed"}
+[api] {"level":30,"time":1779855383404,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-h","res":{"statusCode":200},"responseTime":11.132200000341982,"msg":"request completed"}
+[web] [2m12:22:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779855786293,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-i","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1628},"msg":"incoming request"}
+[api] {"level":30,"time":1779855786294,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-j","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1629},"msg":"incoming request"}
+[api] {"level":30,"time":1779855786294,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-k","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1630},"msg":"incoming request"}
+[api] {"level":30,"time":1779855786295,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-l","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1632},"msg":"incoming request"}
+[api] {"level":30,"time":1779855786296,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-i","res":{"statusCode":200},"responseTime":3.2370000001974404,"msg":"request completed"}
+[api] {"level":30,"time":1779855786297,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-j","res":{"statusCode":200},"responseTime":3.4787000003270805,"msg":"request completed"}
+[api] {"level":30,"time":1779855786317,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-k","res":{"statusCode":200},"responseTime":23.07620000001043,"msg":"request completed"}
+[api] {"level":30,"time":1779855786321,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-l","res":{"statusCode":200},"responseTime":26.22940000006929,"msg":"request completed"}
+[web] [2m12:24:26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779855866593,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-m","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1781},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866594,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-n","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1782},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866594,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-o","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1784},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866594,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-p","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1785},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866595,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-q","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1790},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866596,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-n","res":{"statusCode":200},"responseTime":2.894700000062585,"msg":"request completed"}
+[api] {"level":30,"time":1779855866597,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-m","res":{"statusCode":200},"responseTime":4.288900000043213,"msg":"request completed"}
+[api] {"level":30,"time":1779855866598,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-r","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1791},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866599,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-s","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1794},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866599,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-t","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":1795},"msg":"incoming request"}
+[api] {"level":30,"time":1779855866600,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-q","res":{"statusCode":200},"responseTime":4.513000000268221,"msg":"request completed"}
+[api] {"level":30,"time":1779855866605,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-r","res":{"statusCode":200},"responseTime":6.533199999947101,"msg":"request completed"}
+[api] {"level":30,"time":1779855866616,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-o","res":{"statusCode":200},"responseTime":21.74489999981597,"msg":"request completed"}
+[api] {"level":30,"time":1779855866626,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-p","res":{"statusCode":200},"responseTime":31.635999999940395,"msg":"request completed"}
+[api] {"level":30,"time":1779855866635,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-s","res":{"statusCode":200},"responseTime":35.741899999789894,"msg":"request completed"}
+[api] {"level":30,"time":1779855866638,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-t","res":{"statusCode":200},"responseTime":38.44179999968037,"msg":"request completed"}
+[web] [2m12:24:54[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[web] [2m12:25:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
+[web] [2m12:25:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
+[api] {"level":30,"time":1779856452676,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-u","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2799},"msg":"incoming request"}
+[api] {"level":30,"time":1779856452677,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-v","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2800},"msg":"incoming request"}
+[api] {"level":30,"time":1779856452677,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-w","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2801},"msg":"incoming request"}
+[api] {"level":30,"time":1779856452677,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-x","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2802},"msg":"incoming request"}
+[api] {"level":30,"time":1779856452679,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-u","res":{"statusCode":200},"responseTime":2.225599999539554,"msg":"request completed"}
+[api] {"level":30,"time":1779856452679,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-v","res":{"statusCode":200},"responseTime":1.8507000003010035,"msg":"request completed"}
+[api] {"level":30,"time":1779856452688,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-w","res":{"statusCode":200},"responseTime":10.370500000193715,"msg":"request completed"}
+[api] {"level":30,"time":1779856452689,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-x","res":{"statusCode":200},"responseTime":11.78029999975115,"msg":"request completed"}
+[web] [2m12:34:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[api] {"level":30,"time":1779856470760,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-y","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2870},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470761,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-z","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2871},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470761,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-10","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2872},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470762,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-11","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2873},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470763,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-y","res":{"statusCode":200},"responseTime":2.27419999986887,"msg":"request completed"}
+[api] {"level":30,"time":1779856470764,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-z","res":{"statusCode":200},"responseTime":2.955900000408292,"msg":"request completed"}
+[api] {"level":30,"time":1779856470764,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-12","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2878},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470767,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-13","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2880},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470768,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-12","res":{"statusCode":200},"responseTime":3.3952000001445413,"msg":"request completed"}
+[api] {"level":30,"time":1779856470769,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-14","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2882},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470769,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-15","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":2884},"msg":"incoming request"}
+[api] {"level":30,"time":1779856470770,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-13","res":{"statusCode":200},"responseTime":2.8377999998629093,"msg":"request completed"}
+[api] {"level":30,"time":1779856470771,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-10","res":{"statusCode":200},"responseTime":9.877399999648333,"msg":"request completed"}
+[api] {"level":30,"time":1779856470774,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-11","res":{"statusCode":200},"responseTime":11.840800000354648,"msg":"request completed"}
+[api] {"level":30,"time":1779856470780,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-14","res":{"statusCode":200},"responseTime":11.240500000305474,"msg":"request completed"}
+[api] {"level":30,"time":1779856470782,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-15","res":{"statusCode":200},"responseTime":13.316300000064075,"msg":"request completed"}
+[web] [2m12:34:54[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[web] [2m12:35:10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
+[api] {"level":30,"time":1779856541075,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-16","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3097},"msg":"incoming request"}
+[api] {"level":30,"time":1779856541076,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-17","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3098},"msg":"incoming request"}
+[api] {"level":30,"time":1779856541076,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-18","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3099},"msg":"incoming request"}
+[api] {"level":30,"time":1779856541076,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-19","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3100},"msg":"incoming request"}
+[api] {"level":30,"time":1779856541078,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-16","res":{"statusCode":200},"responseTime":2.656000000424683,"msg":"request completed"}
+[api] {"level":30,"time":1779856541078,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-17","res":{"statusCode":200},"responseTime":2.3789999997243285,"msg":"request completed"}
+[api] {"level":30,"time":1779856541086,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-18","res":{"statusCode":200},"responseTime":10.17479999922216,"msg":"request completed"}
+[api] {"level":30,"time":1779856541088,"pid":29948,"hostname":"DESKTOP-6PHL6BM","reqId":"req-19","res":{"statusCode":200},"responseTime":11.521200000308454,"msg":"request completed"}
+[api] 12:42:26 [tsx] change in ./src\trends.ts Restarting...
+[api] c◇ injected env (3) from ..\..\.env // tip: ⌘ override existing { override: true }
+[api] {"level":30,"time":1779856946641,"pid":29112,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://127.0.0.1:3001"}
+[api] {"level":30,"time":1779856946641,"pid":29112,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.174.1:3001"}
+[api] {"level":30,"time":1779856946641,"pid":29112,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.211.1:3001"}
+[api] {"level":30,"time":1779856946641,"pid":29112,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://192.168.0.102:3001"}
+[api] {"level":30,"time":1779856946641,"pid":29112,"hostname":"DESKTOP-6PHL6BM","msg":"Server listening at http://172.18.176.1:3001"}
+[api] {"level":30,"time":1779856962095,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3803},"msg":"incoming request"}
+[api] {"level":30,"time":1779856962112,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":3806},"msg":"incoming request"}
+[api] {"level":30,"time":1779856962120,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-1","res":{"statusCode":200},"responseTime":24.30420000012964,"msg":"request completed"}
+[api] {"level":30,"time":1779856962130,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-2","res":{"statusCode":200},"responseTime":18.032700000330806,"msg":"request completed"}
+[api] {"level":30,"time":1779857135359,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","req":{"method":"GET","url":"/api/trends/product-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":4095},"msg":"incoming request"}
+[api] {"level":30,"time":1779857135360,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","req":{"method":"GET","url":"/api/trends/shop-count","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":4096},"msg":"incoming request"}
+[api] {"level":30,"time":1779857135360,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","req":{"method":"GET","url":"/api/trends/product-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":4097},"msg":"incoming request"}
+[api] {"level":30,"time":1779857135362,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","req":{"method":"GET","url":"/api/trends/shop-diff","host":"localhost:3001","remoteAddress":"127.0.0.1","remotePort":4099},"msg":"incoming request"}
+[api] {"level":30,"time":1779857135363,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-3","res":{"statusCode":200},"responseTime":4.442499999888241,"msg":"request completed"}
+[api] {"level":30,"time":1779857135367,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-4","res":{"statusCode":200},"responseTime":7.446699999272823,"msg":"request completed"}
+[api] {"level":30,"time":1779857135378,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-5","res":{"statusCode":200},"responseTime":17.813099999912083,"msg":"request completed"}
+[api] {"level":30,"time":1779857135380,"pid":29112,"hostname":"DESKTOP-6PHL6BM","reqId":"req-6","res":{"statusCode":200},"responseTime":17.961199999786913,"msg":"request completed"}

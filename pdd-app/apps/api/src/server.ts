@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import { config } from 'dotenv'
 import Fastify from 'fastify'
 import { registerProductRoutes } from './products.js'
-import { registerTrendRoutes } from './trends.js'
+import { registerTrendRoutes } from './trends-recovered.js'
 import { registerSyncRoutes } from './sync.js'
 
 config({
@@ -24,7 +24,8 @@ app.setErrorHandler((error, request, reply) => {
 })
 
 await app.register(cors, {
-  origin: true
+  origin: true,
+  methods: ['GET', 'HEAD', 'POST', 'PATCH']
 })
 
 app.get('/health', async () => ({ ok: true }))

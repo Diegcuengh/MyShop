@@ -7,12 +7,13 @@ const stamp = new Intl.DateTimeFormat('sv-SE', {
   dateStyle: 'short',
   timeStyle: 'medium',
 }).format(statSync(new URL(import.meta.url)).mtime).replace(' ', '/')
-console.log(`MyShop wholesale layout v0.0.5/${stamp}`)
+console.log(`MyShop wholesale layout v0.0.6/${stamp}`)
 
 const run = { runId: 'fixture', keyword: 'fixture', crawlTime: '2026-04-14T00:00:00Z' }
 const previous = { ...run, runId: 'previous' }
 const product = {
   ...run, goodsId: '505562248188', title: 'Example product', shopName: 'Example store',
+  goodsUrl: 'https://pifa.pinduoduo.com/goods/detail/?gid=505562248188',
   imageUrl: '/fixture-cover', minWholesalePriceYuan: 22.61, maxWholesalePriceYuan: 188.86,
   carouselMedia: [], detailMedia: [], tags: [], material: '',
   skus: ['A', 'B'].flatMap(shape => ['Small', 'Large'].map(size => ({
@@ -105,8 +106,8 @@ try {
   assert.equal(await cart.locator('article').count(), 0)
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1802, height: 1142 })
-  await page.locator('.wholesale-analysis-toggle').click()
   const categoryTabs = page.locator('.product-result-panel .result-tabs button')
+  if (!(await categoryTabs.first().isVisible())) await page.locator('.wholesale-analysis-toggle').click()
   for (const [index, id, title] of [[0, '3', 'Removed item'], [1, '2', 'Added item'], [2, '4', 'Overlap item'], [3, product.goodsId, product.title]]) {
     const tab = categoryTabs.nth(index)
     await tab.click()
@@ -120,7 +121,35 @@ try {
     await card.waitFor()
     assert.equal(await tab.evaluate(button => button.classList.contains('active')), true)
   }
-  console.log('PASS: catalogue geometry, cart, SKU filters, quantity limits and narrow layouts')
+  await page.addInitScript(() => {
+    window.__TAURI_INTERNALS__ = {}
+    window.__TAURI__ = {
+      core: { invoke: async (name, args) => { window.lastDesktopCall = { name, args } } },
+      event: { listen: async () => () => {} },
+    }
+  })
+  await page.reload()
+  const actions = page.locator('.wholesale-actions')
+  await page.locator('.wholesale-card').first().click()
+  const primary = actions.getByRole('button', { name: '立即铺货' })
+  const buy = actions.getByRole('link', { name: '立即购买' })
+  await primary.waitFor()
+  assert.ok((await buy.boundingBox()).x > (await primary.boundingBox()).x)
+  await buy.click()
+  assert.deepEqual(await page.evaluate(() => window.lastDesktopCall), {
+    name: 'open_external_url', args: { url: product.goodsUrl },
+  })
+  page.once('dialog', dialog => dialog.dismiss())
+  await actions.getByRole('button', { name: '确认已发布' }).click()
+  assert.ok(await primary.isEnabled())
+  page.once('dialog', dialog => dialog.accept())
+  await actions.getByRole('button', { name: '确认已发布' }).click()
+  const listed = actions.getByRole('button', { name: '已经铺货' })
+  assert.ok(await listed.isDisabled())
+  await page.reload()
+  await page.locator('.wholesale-card').first().click()
+  assert.ok(await listed.isDisabled())
+  console.log('PASS: catalogue layout, SKU and cart controls, source purchase link and saved listing status')
 } finally {
   await browser.close()
 }
