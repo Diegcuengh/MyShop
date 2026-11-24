@@ -8,6 +8,7 @@ type SyncResult = {
   skippedRuns: number
   failedRuns: number
   buildInfo: string
+  warnings: string[]
 }
 
 const importerPath = fileURLToPath(new URL('../../../../import_pdd_to_mongo.py', import.meta.url))
@@ -63,11 +64,22 @@ function runImporter(): Promise<SyncResult> {
         reject(new Error(`同步抓取失败：${(stderr || stdout).trim().slice(-1200) || `退出码 ${code}`}`))
         return
       }
+      const warningLine = stdout.split(/\r?\n/).find((line) => line.startsWith('SYNC_WARNINGS_JSON='))
+      let warnings: string[] = []
+      if (warningLine) {
+        try {
+          const parsed: unknown = JSON.parse(warningLine.slice('SYNC_WARNINGS_JSON='.length))
+          if (Array.isArray(parsed)) warnings = parsed.filter((item): item is string => typeof item === 'string')
+        } catch {
+          warnings = ['无法读取同步警告，请检查后端日志。']
+        }
+      }
       resolve({
         importedRuns: summaryCount(stdout, 'runs'),
         skippedRuns: summaryCount(stdout, 'skipped_runs'),
         failedRuns,
-        buildInfo: stdout.split(/\r?\n/)[0] ?? ''
+        buildInfo: stdout.split(/\r?\n/)[0] ?? '',
+        warnings
       })
     })
   })
@@ -77,7 +89,11 @@ export async function registerSyncRoutes(app: FastifyInstance) {
   app.post('/api/trends/sync', async (_request, reply) => {
     try {
       activeSync ??= runImporter().finally(() => { activeSync = null })
-      return await activeSync
+      const result = await activeSync
+      if (result.warnings.length) {
+        return reply.status(500).send({ message: `其他目录已完成同步，但以下目录无法读取：${result.warnings.join('；')}` })
+      }
+      return result
     } catch (error) {
       reply.status(500)
       return { message: error instanceof Error ? error.message : '同步抓取失败' }

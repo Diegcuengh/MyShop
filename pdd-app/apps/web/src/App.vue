@@ -249,7 +249,7 @@ function confirmListedGoods(goodsId: string) {
     error.value = '无法保存铺货状态，请检查本地存储后重试。'
   }
 }
-type ListingProduct = Pick<DiffProduct, 'goodsId' | 'title' | 'imageUrl' | 'carouselMedia'>
+type ListingProduct = Pick<DiffProduct, 'goodsId' | 'title' | 'imageUrl' | 'carouselMedia' | 'detailMedia' | 'properties' | 'material' | 'skus'>
 const titleCorrection = ref<{ product: ListingProduct; title: string } | null>(null)
 const imageChoice = ref<{ product: ListingProduct; urls: string[]; selected: string; message: string } | null>(null)
 const correctedTitleLength = computed(() => Array.from(titleCorrection.value?.title ?? '').reduce((total, char) => total + (char.codePointAt(0)! > 127 ? 2 : 1), 0))
@@ -914,9 +914,10 @@ async function syncInBackground() {
   syncError.value = ''
   syncStatus.value = '正在后台检查新抓取，已有数据可继续查看。'
   try {
-    const result = await apiSend<{ importedRuns: number; buildInfo: string }>('/api/trends/sync', 'POST', {})
+    const result = await apiSend<{ importedRuns: number; buildInfo: string; warnings?: string[] }>('/api/trends/sync', 'POST', {})
     if (result.buildInfo) console.info(result.buildInfo)
     syncStatus.value = result.importedRuns > 0 ? `已同步 ${result.importedRuns} 轮抓取。` : ''
+    if (result.warnings?.length) syncError.value = `部分目录未能同步：${result.warnings.join('；')}`
     if (result.importedRuns > 0) {
       if (loading.value || selectionMode.value || Object.keys(tagDrafts.value).length || Object.keys(materialDrafts.value).length || Object.values(newTagDrafts.value).some(Boolean)) {
         newDataAvailable.value = true
@@ -1479,6 +1480,10 @@ async function sendMerchantProduct(product: ListingProduct) {
     merchantStatus.value = '正在打开商家后台...'
     await tauri.core.invoke('prepare_merchant_product', { product: {
       goodsId: product.goodsId, title: product.title, imageUrl: new URL(product.imageUrl, location.href).href,
+      imageUrls: product.carouselMedia.filter(item => item.type === 'image' && item.imageSrc && localImageUrl(item.imageSrc)).map(item => new URL(item.imageSrc, location.href).href),
+      detailImageUrls: (product.detailMedia ?? []).filter(item => item.type === 'image' && item.imageSrc && localImageUrl(item.imageSrc)).map(item => new URL(item.imageSrc, location.href).href),
+      skuImages: (product.skus ?? []).filter(item => item.thumbUrl).map(item => ({ skuId: item.skuId, specs: item.specs, imageUrl: new URL(item.thumbUrl, location.href).href })),
+      properties: [...(product.properties ?? []), ...(!product.properties?.some(item => item.name === '材质') && product.material ? [{ name: '材质', values: [product.material] }] : [])],
       apiOrigin: new URL(apiBaseUrl || location.origin).origin,
     } })
   } catch (requestError) {

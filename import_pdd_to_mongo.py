@@ -33,7 +33,7 @@ DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
 DEFAULT_DB = "pdd_sales_trends"
 BATCH_SIZE = 500
 DB_STATUS_KEY = "DB_status"
-SCRIPT_VERSION = "v0.0.7"
+SCRIPT_VERSION = "v0.0.9"
 SCRIPT_BUILD_AT = datetime.fromtimestamp(Path(__file__).stat().st_mtime).strftime("%Y-%m-%d/%H:%M:%S")
 
 
@@ -161,12 +161,20 @@ def compact_sku(sku: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def discover_runs(data_root: Path, only_dir: str | None = None) -> list[dict[str, Any]]:
+def discover_runs(data_root: Path, only_dir: str | None = None, warnings: list[str] | None = None) -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
     for folder in sorted(data_root.iterdir(), key=lambda p: p.name):
-        if not folder.is_dir() or not (folder / "goods").is_dir():
+        if only_dir is None and folder.name == "泰山 石敢当_20260526_115329":
             continue
         if only_dir and folder.name != only_dir:
+            continue
+        try:
+            if not folder.is_dir() or not (folder / "goods").is_dir():
+                continue
+        except OSError as error:
+            if warnings is None:
+                raise
+            warnings.append(f"{folder}: 无法读取目录（{error}）")
             continue
 
         keyword, folder_stamp, folder_time = parse_folder_name(folder.name)
@@ -174,8 +182,16 @@ def discover_runs(data_root: Path, only_dir: str | None = None) -> list[dict[str
         list_file = folder / f"{keyword}_商品数据.json"
 
         search_meta: dict[str, Any] = {}
-        if search_file.exists():
-            search_meta = load_json(search_file)
+        try:
+            if search_file.exists():
+                search_meta = load_json(search_file)
+            has_search_file = search_file.exists()
+            has_list_file = list_file.exists()
+        except OSError as error:
+            if warnings is None:
+                raise
+            warnings.append(f"{folder}: 无法读取抓取文件（{error}）")
+            continue
         crawl_time = parse_iso_datetime(search_meta.get("createdAt")) or folder_time
 
         runs.append(
@@ -185,8 +201,8 @@ def discover_runs(data_root: Path, only_dir: str | None = None) -> list[dict[str
                 "keyword": search_meta.get("keyword") or keyword,
                 "folder_stamp": folder_stamp,
                 "crawl_time": crawl_time,
-                "search_file": search_file if search_file.exists() else None,
-                "list_file": list_file if list_file.exists() else None,
+                "search_file": search_file if has_search_file else None,
+                "list_file": list_file if has_list_file else None,
                 "search_meta": search_meta,
             }
         )
@@ -507,8 +523,9 @@ def import_runs(args: argparse.Namespace) -> None:
 
     data_root = Path(args.data_root)
     only_dir = None if args.dir == "全部" else args.dir
-    runs = discover_runs(data_root, only_dir)
-    if not runs:
+    warnings: list[str] = []
+    runs = discover_runs(data_root, only_dir, warnings)
+    if not runs and not warnings:
         raise SystemExit(f"No crawl folders found under {data_root}")
 
     totals = {
@@ -521,14 +538,19 @@ def import_runs(args: argparse.Namespace) -> None:
     }
 
     for run in runs:
-        if is_run_imported(run, db):
+        try:
+            imported = is_run_imported(run, db)
+            goods_dir = run["folder"] / "goods"
+            detail_count = len([p for p in goods_dir.iterdir() if p.is_dir()]) if not imported else 0
+        except OSError as error:
+            warnings.append(f"{run['folder']}: 无法读取抓取数据（{error}）")
+            continue
+        if imported:
             totals["skipped_runs"] += 1
             print(f"{run['run_id']}: skipped, DB_status.status=done in _搜索结果.json")
             continue
 
-        goods_dir = run["folder"] / "goods"
         search_goods_count = len(run["search_meta"].get("goods", [])) if isinstance(run["search_meta"], dict) else 0
-        detail_count = len([p for p in goods_dir.iterdir() if p.is_dir()])
 
         run_doc = {
             "_id": run["run_id"],
@@ -557,7 +579,10 @@ def import_runs(args: argparse.Namespace) -> None:
             if not args.dry_run:
                 write_db_status(run, args, "done", "current_import")
         except Exception as error:
-            mark_run_failed(run, args, error)
+            try:
+                mark_run_failed(run, args, error)
+            except OSError as status_error:
+                warnings.append(f"{run['folder']}: 无法记录导入状态（{status_error}）")
             totals["failed_runs"] += 1
             print(f"{run['run_id']}: failed, DB_status.status=failed, error={error}")
             continue
@@ -585,6 +610,8 @@ def import_runs(args: argparse.Namespace) -> None:
     print("\nImported operation totals:")
     for key, value in totals.items():
         print(f"  {key}: {value}")
+
+    print('SYNC_WARNINGS_JSON=' + json.dumps(warnings, ensure_ascii=False))
 
     client.close()
 

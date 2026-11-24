@@ -132,7 +132,7 @@ type CrawlRun = {
   folder?: string
 }
 
-const mergedSourceRunIds = ['泰山 石敢当_20261116_161943', '泰山 石敢当_20261116_215528']
+const mergedSourceRunIds = ['泰山 石敢当_20261116_161943', '泰山 石敢当_20261116_215528', '泰山 石敢当_20260528_081234', '泰山 石敢当_20260526_115329']
 const visibleRuns = { $nin: mergedSourceRunIds }
 
 function serializeSku(sku: NonNullable<SnapshotProduct['skus']>[number], product: SnapshotProduct) {
